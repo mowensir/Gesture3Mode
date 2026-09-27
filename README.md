@@ -74,7 +74,7 @@ APDS9960 原生只会上报「上/下/左/右」四方向，没有直接的顺�
 | 参数 | 含义 | 建议值 |
 | --- | --- | --- |
 | `GESTURE_PROX_THRESH` | 手势入口接近阈值，越大越要手很近 | 30 |
-| `GESTURE_GAIN` | 手势增益 | 4 (4×) |
+| `GESTURE_GAIN` | APDS9960 手势增益寄存器值（2=4×） | 2 |
 | `GESTURE_COOLDOWN_MS` | 两次有效动作最小间隔，防连发 | 350 |
 | `ARC_STEPS_TO_CONFIRM` | 连续步进数达到此值确认圆弧 | 3 |
 | `SOLO_TIMEOUT_MS` | 第一帧判为单方向的最大等待 | 160 |
@@ -86,7 +86,7 @@ APDS9960 原生只会上报「上/下/左/右」四方向，没有直接的顺�
 - **OLED 不亮**：先单独跑 Adafruit 的 `ssd1306_128x64_i2c` 示例确认接线和地址；背面焊盘在 `0x7A` 侧时把 `OLED_ADDR` 改为 `0x3D`。
 - **APDS 初始化失败**：串口会打印 `[APDS] begin() failed @ 0x39`。用 I²C 扫描确认 `0x39` 是否存在；核对 3.3V 供电、SDA/SCL 是否接反。
 - **手势不触发或误触发**：看串口日志的 `[GESTURE]` 行；挥手时保持 5cm 左右、手势轨迹尽量走圆弧而非折线。
-- **BLE 连不上**：确认电脑/手机蓝牙已开启；首次配对可能需几秒。键盘和鼠标库使用 ESP32 Arduino 自带的传统 BLE 栈，工程不需要额外加入 `NimBLE-Arduino`。
+- **BLE 连不上**：确认电脑/手机蓝牙已开启；首次配对可能需几秒。键盘使用 `ESP32-NIMBLE-Keyboard`，鼠标使用项目内修复版 `lib/NimBLEMouse`，二者共用 `NimBLE-Arduino`。
 - **烧录/运行时注意**：BOOT(GPIO0) 仅在**复位/上电瞬间**决定进入下载模式；正常运行时把它作为模式切换键不会影响烧录。若 GPIO0 被外部电路强拉，可能导致无法进入下载模式。
 
 ## 依赖库
@@ -94,8 +94,9 @@ APDS9960 原生只会上报「上/下/左/右」四方向，没有直接的顺�
 - `adafruit/Adafruit SSD1306`
 - `adafruit/Adafruit GFX Library`
 - `adafruit/Adafruit APDS9960`
-- `T-vK/ESP32-BLE-Keyboard`
-- `T-vK/ESP32-BLE-Mouse`
+- `h2zero/NimBLE-Arduino`
+- `webmonkey/ESP32-NIMBLE-Keyboard`
+- `lib/NimBLEMouse`
 
 ## License
 

@@ -5,7 +5,7 @@
  *       模式1 电脑键盘（PPT翻页：上/下=PageUp/Down，左=←，右=Enter）
  *       模式2 电脑鼠标（方向=光标±20，靠近=左键，顺/逆时针=滚轮）
  *       模式3 安卓媒体（方向=音量±/上一曲/下一曲，顺/逆时针=音量±）
- * 圆弧判定：仅模式2启用，连续3个相邻方向步进确认一次圆弧
+ * 圆弧判定：三种模式均启用，连续3个相邻方向步进确认一次圆弧
  */
 
 #include <Arduino.h>
@@ -20,11 +20,15 @@
 #define OLED_SDA             21
 #define OLED_SCL             22
 #define OLED_RST             -1
+#ifndef OLED_ADDR
 #define OLED_ADDR            0x3C
+#endif
 #define OLED_W               128
 #define OLED_H               64
 
+#ifndef APDS_ADDR
 #define APDS_ADDR            0x39
+#endif
 
 #define BUZZER_PIN           5
 #define BOOT_PIN             0
@@ -48,7 +52,7 @@ enum Mode : uint8_t {
 };
 volatile Mode g_mode = MODE_PC_KEY;
 
-/* ===================== 圆弧状态机（仅模式2启用） ===================== */
+/* ===================== 圆弧状态机 ===================== */
 enum Dir : uint8_t {
   DIR_NONE  = 0,
   DIR_UP    = 1,
@@ -59,15 +63,19 @@ enum Dir : uint8_t {
 
 enum ArcState : uint8_t {
   ARC_IDLE    = 0,
-  ARC_ARC     = 1
+  ARC_PENDING = 1,
+  ARC_ARC     = 2
 };
 
 static ArcState arcState = ARC_IDLE;
-static Dir  arcLastDir = DIR_NONE;
-static uint8_t arcCwCnt = 0, arcCcwCnt = 0;
-static uint32_t arcStartMs = 0;
+static Dir arcPendingDir = DIR_NONE;
+static Dir arcLastDir = DIR_NONE;
+static uint8_t arcCwCnt = 0;
+static uint8_t arcCcwCnt = 0;
+static uint32_t arcTimeMs = 0;
 
-#define ARC_TIMEOUT_MS 800
+#define SOLO_TIMEOUT_MS 160
+#define ARC_TIMEOUT_MS 900
 
 static bool isCwStep(Dir prev, Dir cur) {
   return (prev == DIR_RIGHT && cur == DIR_DOWN) ||
@@ -81,31 +89,59 @@ static bool isCcwStep(Dir prev, Dir cur) {
          (prev == DIR_LEFT  && cur == DIR_DOWN) ||
          (prev == DIR_DOWN  && cur == DIR_RIGHT);
 }
-
 static void arcReset() {
   arcState = ARC_IDLE;
+  arcPendingDir = DIR_NONE;
   arcLastDir = DIR_NONE;
   arcCwCnt = 0;
   arcCcwCnt = 0;
 }
 
-// 返回：0=无事件，1=顺时针完成，2=逆时针完成，其他=忽略
-static int arcFeed(Dir d) {
-  if (arcState == ARC_IDLE) {
-    arcState = ARC_ARC;
-    arcLastDir = d;
-    arcStartMs = millis();
-    // 第一个方向不算步进，只作为起始
-    return 0;
-  }
+#define EVT_NONE 0x00
+#define EVT_SOLO(d) (0x40 | ((d) & 0x0F))
+#define EVT_CW 0x81
+#define EVT_CCW 0x82
 
-  // 超时重置
-  if (millis() - arcStartMs > ARC_TIMEOUT_MS) {
+static uint8_t arcFeed(Dir d) {
+  uint32_t now = millis();
+
+  if (arcState == ARC_PENDING && now - arcTimeMs > SOLO_TIMEOUT_MS) {
+    Dir solo = arcPendingDir;
+    arcReset();
+    return EVT_SOLO(solo);
+  }
+  if (arcState == ARC_ARC && now - arcTimeMs > ARC_TIMEOUT_MS) {
     arcReset();
     return 0;
   }
 
-  if (d == arcLastDir) return 0; // 同方向持续不计数
+  if (arcState == ARC_IDLE) {
+    arcState = ARC_PENDING;
+    arcPendingDir = d;
+    arcTimeMs = now;
+    return 0;
+  }
+
+  if (arcState == ARC_PENDING) {
+    if (d == arcPendingDir) {
+      Dir solo = arcPendingDir;
+      arcReset();
+      return EVT_SOLO(solo);
+    }
+    if (isCwStep(arcPendingDir, d) || isCcwStep(arcPendingDir, d)) {
+      arcState = ARC_ARC;
+      arcLastDir = d;
+      arcTimeMs = now;
+      if (isCwStep(arcPendingDir, d)) arcCwCnt = 1;
+      else arcCcwCnt = 1;
+      return 0;
+    }
+    arcPendingDir = d;
+    arcTimeMs = now;
+    return 0;
+  }
+
+  if (d == arcLastDir) return 0;
 
   if (isCwStep(arcLastDir, d)) {
     arcCcwCnt = 0;
@@ -114,20 +150,42 @@ static int arcFeed(Dir d) {
     arcCwCnt = 0;
     arcCcwCnt++;
   } else {
-    // 折回方向：重置状态，以当前方向为新起点
-    arcReset();
-    arcState = ARC_ARC;
-    arcLastDir = d;
-    arcStartMs = millis();
+    arcState = ARC_PENDING;
+    arcPendingDir = d;
+    arcLastDir = DIR_NONE;
+    arcCwCnt = 0;
+    arcCcwCnt = 0;
+    arcTimeMs = now;
     return 0;
   }
 
   arcLastDir = d;
-  arcStartMs = millis();
+  arcTimeMs = now;
 
-  if (arcCwCnt >= ARC_STEPS_TO_CONFIRM) { arcReset(); return 1; }
-  if (arcCcwCnt >= ARC_STEPS_TO_CONFIRM) { arcReset(); return 2; }
-  return 0;
+  if (arcCwCnt >= ARC_STEPS_TO_CONFIRM) { arcReset(); return EVT_CW; }
+  if (arcCcwCnt >= ARC_STEPS_TO_CONFIRM) { arcReset(); return EVT_CCW; }
+  return EVT_NONE;
+}
+
+static uint8_t arcPoll() {
+  if (arcState != ARC_PENDING) {
+    if (arcState == ARC_ARC && millis() - arcTimeMs > ARC_TIMEOUT_MS) arcReset();
+    return EVT_NONE;
+  }
+  if (millis() - arcTimeMs <= SOLO_TIMEOUT_MS) return EVT_NONE;
+  Dir solo = arcPendingDir;
+  arcReset();
+  return EVT_SOLO(solo);
+}
+
+static Dir apdsToDir(uint8_t gesture) {
+  switch (gesture) {
+    case APDS9960_UP: return DIR_UP;
+    case APDS9960_DOWN: return DIR_DOWN;
+    case APDS9960_LEFT: return DIR_LEFT;
+    case APDS9960_RIGHT: return DIR_RIGHT;
+    default: return DIR_NONE;
+  }
 }
 
 /* ===================== OLED ===================== */
@@ -174,19 +232,21 @@ static void beepUpdate() {
 
 /* ===================== BLE 管理 ===================== */
 static void ensureHID() {
-  // 每次切换模式前先断开旧服务，再开启新服务，确保广播可见
-  if (g_mode == MODE_PC_MOUSE) {
-    if (kb.isConnected()) kb.end();
+  static bool keyboardStarted = false;
+  static bool mouseStarted = false;
+  if (g_mode == MODE_PC_MOUSE && !mouseStarted) {
     mo.begin();
-  } else {
-    if (mo.isConnected()) mo.end();
+    mouseStarted = true;
+  } else if (g_mode != MODE_PC_MOUSE && !keyboardStarted) {
     kb.begin();
+    keyboardStarted = true;
   }
 }
 
 static void switchMode() {
   g_mode = (Mode)((uint8_t)g_mode + 1);
   if (g_mode > MODE_ANDROID) g_mode = MODE_PC_KEY;
+  arcReset();
   ensureHID();
   beepStart(2200, 75);
   oledShowMode();
@@ -262,12 +322,12 @@ static void execCircle(bool cw) {
 
   switch (g_mode) {
     case MODE_PC_KEY:
-      // 键盘模式也用圆弧？这里预留，实际上不会走到（见 loop）
+      if (cw) { kb.write(KEY_PAGE_DOWN); oledShowAction("Next >>"); }
+      else    { kb.write(KEY_PAGE_UP);   oledShowAction("<< Prev"); }
       break;
     case MODE_PC_MOUSE:
-      // 顺时针→滚轮向上（负值），逆时针→滚轮向下（正值）
-      if (cw) { mo.move(0, 0, -1); oledShowAction("Wheel Up"); }
-      else    { mo.move(0, 0, 1);  oledShowAction("Wheel Down"); }
+      if (cw) { mo.move(0, 0, 1);  oledShowAction("Wheel Up"); }
+      else    { mo.move(0, 0, -1); oledShowAction("Wheel Down"); }
       break;
     case MODE_ANDROID:
       if (cw) { kb.write(KEY_MEDIA_VOLUME_UP);   oledShowAction("Vol +"); }
@@ -334,26 +394,23 @@ void loop() {
     switchMode();
   }
 
+  uint8_t timeoutEvent = arcPoll();
+  if ((timeoutEvent & 0xC0) == 0x40) {
+    execDirection((Dir)(timeoutEvent & 0x0F));
+  }
+
   uint8_t g = apds.readGesture();
   if (g != 0) {
-    Dir d = DIR_NONE;
-    switch (g) {
-      case APDS9960_UP:    d = DIR_UP;    break;
-      case APDS9960_DOWN:  d = DIR_DOWN;  break;
-      case APDS9960_LEFT:  d = DIR_LEFT;  break;
-      case APDS9960_RIGHT: d = DIR_RIGHT; break;
-      default: break;
-    }
+    Dir d = apdsToDir(g);
 
     if (d != DIR_NONE) {
-      // 模式2（鼠标）才启用圆弧判定，其余模式直接执行单方向
-      if (g_mode == MODE_PC_MOUSE) {
-        int evt = arcFeed(d);
-        if (evt == 1) execCircle(true);
-        else if (evt == 2) execCircle(false);
-        // 圆弧判定过程中不产生单方向动作
-      } else {
-        execDirection(d);
+      uint8_t evt = arcFeed(d);
+      if (evt == EVT_CW) {
+        execCircle(true);
+      } else if (evt == EVT_CCW) {
+        execCircle(false);
+      } else if ((evt & 0xC0) == 0x40) {
+        execDirection((Dir)(evt & 0x0F));
       }
     }
   }
