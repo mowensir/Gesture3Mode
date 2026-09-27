@@ -1,22 +1,11 @@
 /*
- * 手势蓝牙控制器（学校作品 / 毕设演示）
- * ---------------------------------------------------------------
- * 硬件：ESP32 + APDS9960/PAJ9960U2 手势传感器 + 0.96" SSD1306 OLED
- *       (128x64, I2C) + 无源蜂鸣器
- * 功能：BLE HID 三模式，短按 BOOT(GPIO0) 切换
- *         MODE 1 电脑键盘  -> PPT 翻页 / 方向键
- *         MODE 2 电脑鼠标  -> 光标移动 / 左键 / 滚轮
- *         MODE 3 安卓媒体  -> 音量 / 曲目 / 播放暂停
- * 顺/逆时针：APDS9960 原生只给上下左右四方向，用“连续相邻方向步进”计数
- *       识别。连续 3 个顺时针步进=顺时针完成；3 个逆时针步进=逆时针完成。
- *       顺时针 -> 下页/滚轮上/音量+；逆时针 -> 上页/滚轮下/音量-。
- * 依赖：
- *   adafruit/Adafruit SSD1306
- *   adafruit/Adafruit GFX Library
- *   adafruit/Adafruit APDS9960
- *   h2zero/NimBLE-Arduino
- *   webmonkey/ESP32-NIMBLE-Keyboard (GitHub)
- *   wakwak-koba/ESP32-NIMBLE-Mouse    (GitHub)
+ * 手势蓝牙控制器 v2.0（定稿版）
+ * 硬件：ESP32 + APDS9960/PAJ9960U2 + 0.96" SSD1306 OLED + 无源蜂鸣器
+ * 功能：三模式 BLE HID，短按 BOOT(GPIO0) 切换
+ *       模式1 电脑键盘（PPT翻页：上/下=PageUp/Down，左=←，右=Enter）
+ *       模式2 电脑鼠标（方向=光标±20，靠近=左键，顺/逆时针=滚轮）
+ *       模式3 安卓媒体（方向=音量±/上一曲/下一曲，顺/逆时针=音量±）
+ * 圆弧判定：仅模式2启用，连续3个相邻方向步进确认一次圆弧
  */
 
 #include <Arduino.h>
@@ -27,30 +16,28 @@
 #include <NimBleKeyboard.h>
 #include <BleMouse.h>
 
-/* ========================= 引脚与参数 ========================= */
+/* ===================== 引脚与参数 ===================== */
 #define OLED_SDA             21
 #define OLED_SCL             22
 #define OLED_RST             -1
-#define OLED_ADDR            0x3C    // 背面 0x78 焊盘 -> 7 位 0x3C
+#define OLED_ADDR            0x3C
 #define OLED_W               128
 #define OLED_H               64
 
 #define APDS_ADDR            0x39
 
 #define BUZZER_PIN           5
-#define BOOT_PIN             0       // ESP32 自带 BOOT = GPIO0
+#define BOOT_PIN             0
 
 #define GESTURE_PROX_THRESH  30
-#define GESTURE_GAIN         4       // APDS9960_GGAIN_4
-#define GESTURE_LED_DRIVE    3       // APDS9960_LEDDRIVE_100MA
-#define GESTURE_COOLDOWN_MS  350     // 两次有效手势最小间隔
-#define ARC_STEPS_TO_CONFIRM 3       // 连续 3 个同方向步进确认圆弧
+#define GESTURE_GAIN         2       // 0=1x, 1=2x, 2=4x, 3=8x
+#define GESTURE_COOLDOWN_MS  300
+#define ARC_STEPS_TO_CONFIRM 3
 
-/* ========================= 全局对象 ========================= */
+/* ===================== 全局对象 ===================== */
 Adafruit_SSD1306 display(OLED_W, OLED_H, &Wire, OLED_RST);
-Adafruit_APDS9960  apds;
+Adafruit_APDS9960 apds;
 
-// 直接实例化对象（webmonkey 分支不支持指针）
 BleKeyboard kb("GestureCtrl-Key", "SchoolProject", 100);
 BleMouse    mo("GestureCtrl-Mouse", "SchoolProject", 100);
 
@@ -61,18 +48,7 @@ enum Mode : uint8_t {
 };
 volatile Mode g_mode = MODE_PC_KEY;
 
-/* ========================= 顺/逆圆弧状态机 =========================
- * 思路：APDS9960 每次只上报一个方向（上/下/左/右）。单方向手势希望“即时响应”，
- * 顺/逆时针希望“走完一个圆弧再响应”。用三段式状态解决两者的矛盾：
- *   IDLE     ：空闲
- *   PENDING  ：刚收到第一帧，等待确认是孤立方向还是圆弧起点
- *   ARC      ：已进入圆弧判定，累计顺时针/逆时针步进
- * 判定：
- *   - PENDING 状态在 SOLO_TIMEOUT_MS 内无新帧 -> 作为单方向提交
- *   - PENDING 收到第二帧且与第一帧相邻 -> 转 ARC
- *   - ARC 连续累计满 ARC_STEPS_TO_CONFIRM 个同方向步进 -> 圆弧完成
- *   - 超时 / 出现折回方向 -> 重置（折回那帧作为新起点）
- */
+/* ===================== 圆弧状态机（仅模式2启用） ===================== */
 enum Dir : uint8_t {
   DIR_NONE  = 0,
   DIR_UP    = 1,
@@ -83,29 +59,15 @@ enum Dir : uint8_t {
 
 enum ArcState : uint8_t {
   ARC_IDLE    = 0,
-  ARC_PENDING = 1,
-  ARC_ARC     = 2
+  ARC_ARC     = 1
 };
 
 static ArcState arcState = ARC_IDLE;
-static Dir  arcPendingDir = DIR_NONE;   // PENDING 阶段的第一帧
-static Dir  arcLastDir    = DIR_NONE;   // ARC 阶段的上一帧
-static uint8_t arcCwCnt   = 0;         // 连续顺时针步进数
-static uint8_t arcCcwCnt  = 0;         // 连续逆时针步进数
-static uint32_t arcTimeMs = 0;         // 状态进入时间
+static Dir  arcLastDir = DIR_NONE;
+static uint8_t arcCwCnt = 0, arcCcwCnt = 0;
+static uint32_t arcStartMs = 0;
 
-#define SOLO_TIMEOUT_MS  160            // 第一帧判为单方向的最大等待
-#define ARC_TIMEOUT_MS   900            // 圆弧判定的总超时
-
-// arcFeed 返回值：高 2 位=事件类型，低 4 位=方向（仅 ARC_SOLO 有效）
-//   00 0000 = 无事件
-//   01 dddd = 单方向 d
-//   10 0001 = 顺时针完成
-//   10 0010 = 逆时针完成
-#define EVT_NONE    0x00
-#define EVT_SOLO(d) (0x40 | ((d) & 0x0F))
-#define EVT_CW      0x81
-#define EVT_CCW     0x82
+#define ARC_TIMEOUT_MS 800
 
 static bool isCwStep(Dir prev, Dir cur) {
   return (prev == DIR_RIGHT && cur == DIR_DOWN) ||
@@ -113,7 +75,6 @@ static bool isCwStep(Dir prev, Dir cur) {
          (prev == DIR_LEFT  && cur == DIR_UP)   ||
          (prev == DIR_UP    && cur == DIR_RIGHT);
 }
-
 static bool isCcwStep(Dir prev, Dir cur) {
   return (prev == DIR_RIGHT && cur == DIR_UP)   ||
          (prev == DIR_UP    && cur == DIR_LEFT) ||
@@ -122,111 +83,54 @@ static bool isCcwStep(Dir prev, Dir cur) {
 }
 
 static void arcReset() {
-  arcState   = ARC_IDLE;
-  arcPendingDir = DIR_NONE;
+  arcState = ARC_IDLE;
   arcLastDir = DIR_NONE;
-  arcCwCnt   = 0;
-  arcCcwCnt  = 0;
+  arcCwCnt = 0;
+  arcCcwCnt = 0;
 }
 
-static uint8_t arcFeed(Dir d) {
-  uint32_t now = millis();
-
-  // 超时处理：PENDING 超时->提交单方向；ARC 超时->作废
-  if (arcState == ARC_PENDING && now - arcTimeMs > SOLO_TIMEOUT_MS) {
-    Dir solo = arcPendingDir;
-    arcReset();
-    return EVT_SOLO(solo);
-  }
-  if (arcState == ARC_ARC && now - arcTimeMs > ARC_TIMEOUT_MS) {
-    arcReset();
-    return EVT_NONE;
-  }
-
+// 返回：0=无事件，1=顺时针完成，2=逆时针完成，其他=忽略
+static int arcFeed(Dir d) {
   if (arcState == ARC_IDLE) {
-    // 第一帧：进入 PENDING 等待确认
-    arcState = ARC_PENDING;
-    arcPendingDir = d;
-    arcTimeMs = now;
-    return EVT_NONE;
+    arcState = ARC_ARC;
+    arcLastDir = d;
+    arcStartMs = millis();
+    // 第一个方向不算步进，只作为起始
+    return 0;
   }
 
-  if (arcState == ARC_PENDING) {
-    // 第二帧：相同=持续，作为单方向处理；相邻=进入圆弧；折回=替换起点
-    if (d == arcPendingDir) {
-      Dir solo = arcPendingDir;
-      arcReset();
-      return EVT_SOLO(solo);
-    }
-    if (isCwStep(arcPendingDir, d) || isCcwStep(arcPendingDir, d)) {
-      // 进入圆弧：第一帧也算一个步进
-      arcState = ARC_ARC;
-      arcLastDir = d;
-      arcTimeMs = now;
-      if (isCwStep(arcPendingDir, d))  arcCwCnt  = 1;
-      else                            arcCcwCnt = 1;
-      if (arcCwCnt  >= ARC_STEPS_TO_CONFIRM) { arcReset(); return EVT_CW;  }
-      if (arcCcwCnt >= ARC_STEPS_TO_CONFIRM) { arcReset(); return EVT_CCW; }
-      return EVT_NONE;
-    }
-    // 折回方向：替换起点，继续 PENDING
-    arcPendingDir = d;
-    arcTimeMs = now;
-    return EVT_NONE;
+  // 超时重置
+  if (millis() - arcStartMs > ARC_TIMEOUT_MS) {
+    arcReset();
+    return 0;
   }
 
-  // ARC 阶段
-  if (d == arcLastDir) return EVT_NONE;   // 持续手势不计数
+  if (d == arcLastDir) return 0; // 同方向持续不计数
 
   if (isCwStep(arcLastDir, d)) {
     arcCcwCnt = 0;
-    if (arcCwCnt < 255) arcCwCnt++;
+    arcCwCnt++;
   } else if (isCcwStep(arcLastDir, d)) {
     arcCwCnt = 0;
-    if (arcCcwCnt < 255) arcCcwCnt++;
+    arcCcwCnt++;
   } else {
-    // 非相邻折回：作废，本次作为新起点
-    arcState = ARC_PENDING;
-    arcPendingDir = d;
-    arcLastDir = DIR_NONE;
-    arcCwCnt = 0;
-    arcCcwCnt = 0;
-    arcTimeMs = now;
-    return EVT_NONE;
+    // 折回方向：重置状态，以当前方向为新起点
+    arcReset();
+    arcState = ARC_ARC;
+    arcLastDir = d;
+    arcStartMs = millis();
+    return 0;
   }
 
   arcLastDir = d;
-  arcTimeMs = now;
-  if (arcCwCnt  >= ARC_STEPS_TO_CONFIRM) { arcReset(); return EVT_CW;  }
-  if (arcCcwCnt >= ARC_STEPS_TO_CONFIRM) { arcReset(); return EVT_CCW; }
-  return EVT_NONE;
+  arcStartMs = millis();
+
+  if (arcCwCnt >= ARC_STEPS_TO_CONFIRM) { arcReset(); return 1; }
+  if (arcCcwCnt >= ARC_STEPS_TO_CONFIRM) { arcReset(); return 2; }
+  return 0;
 }
 
-static uint8_t arcPoll() {
-  uint32_t now = millis();
-  if (arcState == ARC_PENDING && now - arcTimeMs > SOLO_TIMEOUT_MS) {
-    Dir solo = arcPendingDir;
-    arcReset();
-    return EVT_SOLO(solo);
-  }
-  if (arcState == ARC_ARC && now - arcTimeMs > ARC_TIMEOUT_MS) {
-    arcReset();
-  }
-  return EVT_NONE;
-}
-
-/* 从 APDS 手势码转 Dir */
-static Dir apdsToDir(uint8_t g) {
-  switch (g) {
-    case APDS9960_UP:    return DIR_UP;
-    case APDS9960_DOWN:  return DIR_DOWN;
-    case APDS9960_LEFT:  return DIR_LEFT;
-    case APDS9960_RIGHT: return DIR_RIGHT;
-    default:             return DIR_NONE;
-  }
-}
-
-/* ========================= OLED ========================= */
+/* ===================== OLED ===================== */
 static void oledShowMode() {
   const char* name = "";
   switch (g_mode) {
@@ -234,16 +138,14 @@ static void oledShowMode() {
     case MODE_PC_MOUSE: name = "PC MOUSE";       break;
     case MODE_ANDROID:  name = "ANDROID MEDIA";  break;
   }
-  bool connected = g_mode == MODE_PC_MOUSE
-                     ? mo.isConnected()
-                     : kb.isConnected();
+  bool connected = (g_mode == MODE_PC_MOUSE) ? mo.isConnected() : kb.isConnected();
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);  display.println(F("Gesture-BLE Ctrl"));
-  display.setCursor(0, 18); display.print(F("Mode")); display.print((int)g_mode);
+  display.setCursor(0, 18); display.print(F("Mode ")); display.print((int)g_mode);
   display.print(F(": ")); display.println(name);
-  display.setCursor(0, 46);
+  display.setCursor(0, 44);
   display.print(connected ? F("BLE connected") : F("BLE waiting..."));
   display.display();
 }
@@ -251,30 +153,34 @@ static void oledShowMode() {
 static void oledShowAction(const char* act) {
   display.clearDisplay();
   display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0); display.println(F("Gesture-BLE Ctrl"));
   display.setTextSize(2);
-  display.setCursor(0, 22); display.println(act);
+  display.setCursor(0, 24); display.println(act);
   display.display();
 }
 
-/* ========================= 蜂鸣器 ========================= */
-static void beep(uint16_t freq = 2000, uint16_t dur = 60) {
+/* ===================== 蜂鸣器（非阻塞） ===================== */
+static uint32_t beepEndMs = 0;
+static void beepStart(uint16_t freq = 2300, uint16_t dur = 55) {
   tone(BUZZER_PIN, freq, dur);
-  delay(dur);
-  noTone(BUZZER_PIN);
+  beepEndMs = millis() + dur;
+}
+static void beepUpdate() {
+  if (beepEndMs && millis() >= beepEndMs) {
+    noTone(BUZZER_PIN);
+    beepEndMs = 0;
+  }
 }
 
-/* ========================= BLE 模式 ========================= */
+/* ===================== BLE 管理 ===================== */
 static void ensureHID() {
-  static bool keyboardStarted = false;
-  static bool mouseStarted = false;
-  if ((g_mode == MODE_PC_KEY || g_mode == MODE_ANDROID) && !keyboardStarted) {
-    kb.begin();
-    keyboardStarted = true;
-  } else if (g_mode == MODE_PC_MOUSE && !mouseStarted) {
+  // 每次切换模式前先断开旧服务，再开启新服务，确保广播可见
+  if (g_mode == MODE_PC_MOUSE) {
+    if (kb.isConnected()) kb.end();
     mo.begin();
-    mouseStarted = true;
+  } else {
+    if (mo.isConnected()) mo.end();
+    kb.begin();
   }
 }
 
@@ -282,32 +188,34 @@ static void switchMode() {
   g_mode = (Mode)((uint8_t)g_mode + 1);
   if (g_mode > MODE_ANDROID) g_mode = MODE_PC_KEY;
   ensureHID();
-  beep(2200, 70);
+  beepStart(2200, 75);
   oledShowMode();
   Serial.printf("[MODE] switched -> %d\n", (int)g_mode);
 }
 
-/* ========================= BOOT 中断 ========================= */
+/* ===================== BOOT 中断 ===================== */
 static volatile bool bootPressed = false;
 static uint32_t lastBootMs = 0;
 static void IRAM_ATTR bootISR() {
   uint32_t now = millis();
-  if (now - lastBootMs > 250) {
+  if (now - lastBootMs > 280) {
     bootPressed = true;
     lastBootMs = now;
   }
 }
 
-/* ========================= 动作 ========================= */
+/* ===================== 动作执行 ===================== */
 static bool isBleReady() {
-  if (g_mode == MODE_PC_MOUSE) return mo.isConnected();
-  return kb.isConnected();
+  return (g_mode == MODE_PC_MOUSE) ? mo.isConnected() : kb.isConnected();
 }
 
-static void execGesture(Dir d) {
+static void execDirection(Dir d) {
   static uint32_t lastActMs = 0;
-  if (millis() - lastActMs < GESTURE_COOLDOWN_MS) return;
-  lastActMs = millis();
+  uint32_t now = millis();
+  if (now - lastActMs < GESTURE_COOLDOWN_MS) return;
+  lastActMs = now;
+
+  if (!isBleReady()) { oledShowAction("NO BLE"); beepStart(1000, 90); return; }
 
   const char* name = "";
   switch (d) {
@@ -318,55 +226,59 @@ static void execGesture(Dir d) {
     default: return;
   }
 
-  if (!isBleReady()) { oledShowAction("BLE?"); beep(1000, 80); return; }
-
-  if (g_mode == MODE_PC_KEY) {
-    if (d == DIR_UP)        kb.write(KEY_PAGE_UP);
-    else if (d == DIR_DOWN) kb.write(KEY_PAGE_DOWN);
-    else if (d == DIR_LEFT) kb.write(KEY_LEFT_ARROW);
-    else if (d == DIR_RIGHT){ kb.write(KEY_RETURN); name = "ENTER"; }
-    oledShowAction(name);
-  } else if (g_mode == MODE_PC_MOUSE) {
-    if (d == DIR_UP)        mo.move(0, -20);
-    else if (d == DIR_DOWN) mo.move(0, 20);
-    else if (d == DIR_LEFT) mo.move(-20, 0);
-    else if (d == DIR_RIGHT){ mo.click(MOUSE_LEFT); name = "CLICK"; }
-    oledShowAction(name);
-  } else if (g_mode == MODE_ANDROID) {
-    if (d == DIR_UP)        kb.write(KEY_MEDIA_VOLUME_UP);
-    else if (d == DIR_DOWN) kb.write(KEY_MEDIA_VOLUME_DOWN);
-    else if (d == DIR_LEFT) kb.write(KEY_MEDIA_PREVIOUS_TRACK);
-    else if (d == DIR_RIGHT)kb.write(KEY_MEDIA_NEXT_TRACK);
-    oledShowAction(name);
+  switch (g_mode) {
+    case MODE_PC_KEY:
+      if (d == DIR_UP)        kb.write(KEY_PAGE_UP);
+      else if (d == DIR_DOWN) kb.write(KEY_PAGE_DOWN);
+      else if (d == DIR_LEFT) kb.write(KEY_LEFT_ARROW);
+      else if (d == DIR_RIGHT) { kb.write(KEY_RETURN); name = "ENTER"; }
+      break;
+    case MODE_PC_MOUSE:
+      if (d == DIR_UP)        mo.move(0, -20);
+      else if (d == DIR_DOWN) mo.move(0, 20);
+      else if (d == DIR_LEFT) mo.move(-20, 0);
+      else if (d == DIR_RIGHT) { mo.click(MOUSE_LEFT); name = "CLICK"; }
+      break;
+    case MODE_ANDROID:
+      if (d == DIR_UP)        kb.write(KEY_MEDIA_VOLUME_UP);
+      else if (d == DIR_DOWN) kb.write(KEY_MEDIA_VOLUME_DOWN);
+      else if (d == DIR_LEFT) kb.write(KEY_MEDIA_PREVIOUS_TRACK);
+      else if (d == DIR_RIGHT) kb.write(KEY_MEDIA_NEXT_TRACK);
+      break;
   }
-  beep(2400, 45);
+  oledShowAction(name);
+  beepStart(2400, 42);
 }
 
 static void execCircle(bool cw) {
   static uint32_t lastActMs = 0;
-  if (millis() - lastActMs < GESTURE_COOLDOWN_MS) return;
-  lastActMs = millis();
+  uint32_t now = millis();
+  if (now - lastActMs < GESTURE_COOLDOWN_MS) return;
+  lastActMs = now;
 
-  if (!isBleReady()) { oledShowAction("BLE?"); beep(1000, 80); return; }
+  if (!isBleReady()) { oledShowAction("NO BLE"); beepStart(1000, 90); return; }
 
   Serial.printf("[GESTURE] %s\n", cw ? "CW" : "CCW");
 
-  if (g_mode == MODE_PC_KEY) {
-    if (cw) { kb.write(KEY_PAGE_DOWN); oledShowAction("Next >>"); }
-    else    { kb.write(KEY_PAGE_UP);   oledShowAction("<< Prev"); }
-  } else if (g_mode == MODE_PC_MOUSE) {
-    if (cw) { mo.move(0, 0, 1);  oledShowAction("Wheel+"); }
-    else    { mo.move(0, 0, -1); oledShowAction("Wheel-"); }
-  } else if (g_mode == MODE_ANDROID) {
-    if (cw) { kb.write(KEY_MEDIA_VOLUME_UP);   oledShowAction("Vol +"); }
-    else    { kb.write(KEY_MEDIA_VOLUME_DOWN); oledShowAction("Vol -"); }
+  switch (g_mode) {
+    case MODE_PC_KEY:
+      // 键盘模式也用圆弧？这里预留，实际上不会走到（见 loop）
+      break;
+    case MODE_PC_MOUSE:
+      // 顺时针→滚轮向上（负值），逆时针→滚轮向下（正值）
+      if (cw) { mo.move(0, 0, -1); oledShowAction("Wheel Up"); }
+      else    { mo.move(0, 0, 1);  oledShowAction("Wheel Down"); }
+      break;
+    case MODE_ANDROID:
+      if (cw) { kb.write(KEY_MEDIA_VOLUME_UP);   oledShowAction("Vol +"); }
+      else    { kb.write(KEY_MEDIA_VOLUME_DOWN); oledShowAction("Vol -"); }
+      break;
   }
-  beep(cw ? 2600 : 1800, 50);
+  beepStart(cw ? 2700 : 1900, 47);
 }
 
-/* ========================= APDS 初始化 ========================= */
+/* ===================== APDS 初始化 ===================== */
 static bool initAPDS() {
-  // 修正参数顺序：增益常量、地址、Wire
   if (!apds.begin(10, APDS9960_AGAIN_4X, APDS_ADDR, &Wire)) {
     Serial.println(F("[APDS] begin() failed @ 0x39"));
     return false;
@@ -374,12 +286,12 @@ static bool initAPDS() {
   apds.enableProximity(true);
   apds.enableGesture(true);
   apds.setGestureProximityThreshold(GESTURE_PROX_THRESH);
-  apds.setGestureGain(GESTURE_GAIN);
+  apds.setGestureGain(GESTURE_GAIN);  // 2 = 4x
   Serial.println(F("[APDS] init OK"));
   return true;
 }
 
-/* ========================= SETUP / LOOP ========================= */
+/* ===================== SETUP / LOOP ===================== */
 void setup() {
   Serial.begin(115200);
   delay(200);
@@ -388,14 +300,14 @@ void setup() {
   Wire.begin(OLED_SDA, OLED_SCL);
 
   if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
-    Serial.println(F("[OLED] begin() failed"));
-  } else {
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(SSD1306_WHITE);
-    display.setCursor(0, 0); display.println(F("Init..."));
-    display.display();
+    Serial.println(F("[OLED] begin() failed! Halting."));
+    while (1) delay(1000);  // 无显示则死机，便于排查
   }
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0); display.println(F("Init..."));
+  display.display();
 
   pinMode(BUZZER_PIN, OUTPUT);
   noTone(BUZZER_PIN);
@@ -410,42 +322,48 @@ void setup() {
 
   ensureHID();
   oledShowMode();
-  beep(1800, 60);
+  beepStart(1800, 65);
   Serial.println(F("[BLE] advertising..."));
 }
 
 void loop() {
+  beepUpdate();  // 非阻塞蜂鸣器
+
   if (bootPressed) {
     bootPressed = false;
     switchMode();
   }
 
-  uint8_t timeoutEvent = arcPoll();
-  if ((timeoutEvent & 0xC0) == 0x40) {
-    execGesture((Dir)(timeoutEvent & 0x0F));
-  }
-
   uint8_t g = apds.readGesture();
   if (g != 0) {
-    Dir d = apdsToDir(g);
+    Dir d = DIR_NONE;
+    switch (g) {
+      case APDS9960_UP:    d = DIR_UP;    break;
+      case APDS9960_DOWN:  d = DIR_DOWN;  break;
+      case APDS9960_LEFT:  d = DIR_LEFT;  break;
+      case APDS9960_RIGHT: d = DIR_RIGHT; break;
+      default: break;
+    }
+
     if (d != DIR_NONE) {
-      uint8_t evt = arcFeed(d);
-      uint8_t type = evt & 0xC0;
-      if (evt == EVT_CW) {
-        execCircle(true);
-      } else if (evt == EVT_CCW) {
-        execCircle(false);
-      } else if (type == 0x40) {          // 单方向
-        execGesture((Dir)(evt & 0x0F));
+      // 模式2（鼠标）才启用圆弧判定，其余模式直接执行单方向
+      if (g_mode == MODE_PC_MOUSE) {
+        int evt = arcFeed(d);
+        if (evt == 1) execCircle(true);
+        else if (evt == 2) execCircle(false);
+        // 圆弧判定过程中不产生单方向动作
+      } else {
+        execDirection(d);
       }
     }
   }
 
+  // 每1.5秒刷新OLED状态
   static uint32_t refreshMs = 0;
   if (millis() - refreshMs > 1500) {
     refreshMs = millis();
     oledShowMode();
   }
 
-  delay(10);
+  delay(5);
 }
