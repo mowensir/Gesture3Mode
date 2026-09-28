@@ -53,10 +53,11 @@ GestureBleController/
 ## 使用流程
 
 1. 上电后 OLED 显示当前模式，例如 `Mode1: PC KEY (PPT)`，下方显示 `BLE waiting...`。
-2. 在电脑或手机的蓝牙设置里搜索 `GestureCtrl-Key`（键盘/媒体模式）或 `GestureCtrl-Mouse`（鼠标模式）并配对。
-3. 配对成功后 OLED 显示 `BLE connected`。
-4. 在目标设备前 5cm 左右挥动手势；手不要太远、也不要贴太近导致饱和。
-5. 短按 BOOT 键切换模式，蜂鸣一声表示切换成功。
+2. 配对前先用 BOOT 键切换到要使用的模式：每短按一次按 Mode 1 → Mode 2 → Mode 3 → Mode 1 循环。Mode 1（电脑键盘）和 Mode 3（安卓媒体）使用 `GestureCtrl-Key`；Mode 2（电脑鼠标）使用 `GestureCtrl-Mouse`。手机媒体控制请选择 Mode 3；开机显示 Mode 1 时，短按 BOOT 两次即可切到 Mode 3。
+3. 在电脑或手机的蓝牙设置中搜索并配对当前模式对应的名称：键盘/安卓媒体模式选 `GestureCtrl-Key`，鼠标模式选 `GestureCtrl-Mouse`。
+4. 配对成功后 OLED 显示 `BLE connected`。
+5. 在目标设备前 5cm 左右挥动手势；手不要太远、也不要贴太近导致饱和。
+6. 短按 BOOT 键可切换模式，蜂鸣一声表示切换成功；首次使用另一种蓝牙名称时，需在目标设备上配对该名称。
 
 ## 核心实现：顺/逆圆弧状态机
 
