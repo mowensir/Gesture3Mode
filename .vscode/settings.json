@@ -6,10 +6,5 @@
   "search.exclude": {
     "**/.pio/**": true
   },
-  "platformio-ide.disablePIOHomeStartup": true,
-  "platformio-ide.autoRebuildAutocompleteIndex": false,
-  "platformio-ide.autoPreloadEnvTasks": false,
-  "platformio-ide.autoOpenPlatformIOIniFile": false,
-  "platformio-ide.useBuiltinPython": false, //if you want to use your own Python installation, set this to false and make sure that the Python executable is in your PATH.
-  "platformio-ide.useBuiltinPIOCore": false //if you want to use your own PlatformIO Core installation, set this to false and make sure that the PlatformIO Core executable is in your PATH.
+  "platformio-ide.disablePIOHomeStartup": true
 }
