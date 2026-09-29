@@ -77,18 +77,21 @@ static uint32_t arcTimeMs = 0;
 #define SOLO_TIMEOUT_MS 160
 #define ARC_TIMEOUT_MS 900
 
+// 判断从前一方向转到当前方向是否构成顺时针的一步。
 static bool isCwStep(Dir prev, Dir cur) {
   return (prev == DIR_RIGHT && cur == DIR_DOWN) ||
          (prev == DIR_DOWN  && cur == DIR_LEFT) ||
          (prev == DIR_LEFT  && cur == DIR_UP)   ||
          (prev == DIR_UP    && cur == DIR_RIGHT);
 }
+// 判断从前一方向转到当前方向是否构成逆时针的一步。
 static bool isCcwStep(Dir prev, Dir cur) {
   return (prev == DIR_RIGHT && cur == DIR_UP)   ||
          (prev == DIR_UP    && cur == DIR_LEFT) ||
          (prev == DIR_LEFT  && cur == DIR_DOWN) ||
          (prev == DIR_DOWN  && cur == DIR_RIGHT);
 }
+// 清空圆弧识别状态和计数器，供识别完成、超时或模式切换时调用。
 static void arcReset() {
   arcState = ARC_IDLE;
   arcPendingDir = DIR_NONE;
@@ -102,6 +105,7 @@ static void arcReset() {
 #define EVT_CW 0x81
 #define EVT_CCW 0x82
 
+// 将一个方向输入送入圆弧状态机；识别完成时返回单方向、顺时针或逆时针事件。
 static uint8_t arcFeed(Dir d) {
   uint32_t now = millis();
 
@@ -167,6 +171,7 @@ static uint8_t arcFeed(Dir d) {
   return EVT_NONE;
 }
 
+// 在没有新手势输入时处理等待超时：提交孤立方向，或清理超时圆弧。
 static uint8_t arcPoll() {
   if (arcState != ARC_PENDING) {
     if (arcState == ARC_ARC && millis() - arcTimeMs > ARC_TIMEOUT_MS) arcReset();
@@ -178,6 +183,7 @@ static uint8_t arcPoll() {
   return EVT_SOLO(solo);
 }
 
+// 将 APDS9960 的手势常量转换为程序内部的方向枚举，未知值返回 DIR_NONE。
 static Dir apdsToDir(uint8_t gesture) {
   switch (gesture) {
     case APDS9960_UP: return DIR_UP;
@@ -189,6 +195,7 @@ static Dir apdsToDir(uint8_t gesture) {
 }
 
 /* ===================== OLED ===================== */
+// 在 OLED 上显示当前控制模式及对应 BLE 设备的连接状态。
 static void oledShowMode() {
   const char* name = "";
   switch (g_mode) {
@@ -208,6 +215,7 @@ static void oledShowMode() {
   display.display();
 }
 
+// 在 OLED 上显示最近执行的动作或错误提示。
 static void oledShowAction(const char* act) {
   display.clearDisplay();
   display.setTextSize(1);
@@ -219,10 +227,12 @@ static void oledShowAction(const char* act) {
 
 /* ===================== 蜂鸣器（非阻塞） ===================== */
 static uint32_t beepEndMs = 0;
+// 启动指定频率和时长的提示音，并记录预计结束时间。
 static void beepStart(uint16_t freq = 2300, uint16_t dur = 55) {
   tone(BUZZER_PIN, freq, dur);
   beepEndMs = millis() + dur;
 }
+// 检查提示音是否到期；到期后关闭蜂鸣器，不阻塞主循环。
 static void beepUpdate() {
   if (beepEndMs && millis() >= beepEndMs) {
     noTone(BUZZER_PIN);
@@ -231,6 +241,7 @@ static void beepUpdate() {
 }
 
 /* ===================== BLE 管理 ===================== */
+// 按当前模式启动所需的键盘或鼠标 HID；每种设备只启动一次。
 static void ensureHID() {
   static bool keyboardStarted = false;
   static bool mouseStarted = false;
@@ -243,6 +254,7 @@ static void ensureHID() {
   }
 }
 
+// 循环切换控制模式，并重置手势识别、启动 HID、更新 OLED 和提示音。
 static void switchMode() {
   g_mode = (Mode)((uint8_t)g_mode + 1);
   if (g_mode > MODE_ANDROID) g_mode = MODE_PC_KEY;
@@ -256,6 +268,7 @@ static void switchMode() {
 /* ===================== BOOT 中断 ===================== */
 static volatile bool bootPressed = false;
 static uint32_t lastBootMs = 0;
+// BOOT 键下降沿中断：通过简单消抖后通知主循环执行模式切换。
 static void IRAM_ATTR bootISR() {
   uint32_t now = millis();
   if (now - lastBootMs > 280) {
@@ -265,10 +278,12 @@ static void IRAM_ATTR bootISR() {
 }
 
 /* ===================== 动作执行 ===================== */
+// 查询当前模式对应的 BLE HID 设备是否已连接。
 static bool isBleReady() {
   return (g_mode == MODE_PC_MOUSE) ? mo.isConnected() : kb.isConnected();
 }
 
+// 按当前模式将单方向手势映射为键盘按键、鼠标移动或媒体控制。
 static void execDirection(Dir d) {
   static uint32_t lastActMs = 0;
   uint32_t now = millis();
@@ -310,6 +325,7 @@ static void execDirection(Dir d) {
   beepStart(2400, 42);
 }
 
+// 按当前模式执行顺时针或逆时针圆弧对应的翻页、滚轮或音量动作。
 static void execCircle(bool cw) {
   static uint32_t lastActMs = 0;
   uint32_t now = millis();
@@ -338,6 +354,7 @@ static void execCircle(bool cw) {
 }
 
 /* ===================== APDS 初始化 ===================== */
+// 初始化 APDS9960 并启用接近与手势检测；初始化失败时返回 false。
 static bool initAPDS() {
   if (!apds.begin(10, APDS9960_AGAIN_4X, APDS_ADDR, &Wire)) {
     Serial.println(F("[APDS] begin() failed @ 0x39"));
@@ -352,6 +369,7 @@ static bool initAPDS() {
 }
 
 /* ===================== SETUP / LOOP ===================== */
+// Arduino 启动入口：初始化串口、I2C、OLED、传感器、按键中断及 BLE HID。
 void setup() {
   Serial.begin(115200);
   delay(200);
@@ -386,6 +404,7 @@ void setup() {
   Serial.println(F("[BLE] advertising..."));
 }
 
+// Arduino 主循环：处理提示音、按键、手势状态机及 OLED 状态刷新。
 void loop() {
   beepUpdate();  // 非阻塞蜂鸣器
 
