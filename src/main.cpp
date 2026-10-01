@@ -222,7 +222,6 @@ static void beepStart(uint16_t freq = 2300, uint16_t dur = 55) {
 // 检查提示音是否到期；到期后关闭蜂鸣器，不阻塞主循环。
 static void beepUpdate() {
   if (beepEndMs && millis() >= beepEndMs) {
-    noTone(BUZZER_PIN);
     beepEndMs = 0;
   }
 }
@@ -274,6 +273,7 @@ static bool isBleReady() {
 static void execDirection(Dir d) {
   static uint32_t lastActMs = 0;
   uint32_t now = millis();
+  Serial.printf("[APDS] gesture detected on %02X\n", APDS_ADDR);
   if (now - lastActMs < GESTURE_COOLDOWN_MS) return;
   lastActMs = now;
 
@@ -386,20 +386,14 @@ static Dir readGestureDirection() {
 
   uint8_t data[4];
   for (uint8_t i = 0; i < 4; ++i) data[i] = Wire.read();
-  for (uint8_t value : data) {
-    if (value > 200) {
-      stableCount = 0;
-      return DIR_NONE;
-    }
-  }
 
   int udDiff = (int)data[0] - (int)data[1];
   int lrDiff = (int)data[2] - (int)data[3];
   Dir direction = DIR_NONE;
-  if (abs(udDiff) > 20 && abs(udDiff) > abs(lrDiff)) {
-    direction = udDiff > 0 ? DIR_UP : DIR_DOWN;
-  } else if (abs(lrDiff) > 20 && abs(lrDiff) > abs(udDiff)) {
-    direction = lrDiff > 0 ? DIR_LEFT : DIR_RIGHT;
+  if (abs(udDiff) > 13 && abs(udDiff) > abs(lrDiff)) {
+    direction = udDiff > 0 ? DIR_DOWN : DIR_UP;
+  } else if (abs(lrDiff) > 13 && abs(lrDiff) > abs(udDiff)) {
+    direction = lrDiff > 0 ? DIR_RIGHT : DIR_LEFT;
   }
 
   if (direction == DIR_NONE) {
@@ -420,8 +414,8 @@ static Dir readGestureDirection() {
   if (stableCount < 3 || emitted == direction) return DIR_NONE;
 
   emitted = direction;
-  Serial.printf("[GESTURE] U:%u D:%u L:%u R:%u UD:%d LR:%d\n",
-                data[0], data[1], data[2], data[3], udDiff, lrDiff);
+  Serial.printf("[GESTURE] U:%u D:%u L:%u R:%u UD:%d LR:%d DIR:%u\n",
+                data[0], data[1], data[2], data[3], udDiff, lrDiff, direction);
   return direction;
 }
 
@@ -441,8 +435,8 @@ static bool initAPDS() {
     {0x8F, 0x00}, {0x81, 0xF6}, {0x83, 0xFF}, {0x8D, 0x00},
     {0xA0, GESTURE_PROX_THRESH},
     {0xA1, (uint8_t)(GESTURE_PROX_THRESH * 3 / 4)},
-    {0xA2, 0x40}, {0xA3, (uint8_t)((GESTURE_GAIN & 0x03) << 5)},
-    {0xA6, 0x00}, {0xAA, 0x00}, {0xAB, 0x00}
+    {0xA2, 0x01}, {0xA3, (uint8_t)((GESTURE_GAIN & 0x03) << 4)},
+    {0xA6, 0xC9}, {0xAA, 0x00}, {0xAB, 0x00}
   };
   for (const auto& setting : config) {
     if (!apdsWrite(setting[0], setting[1])) {
@@ -484,7 +478,7 @@ void setup() {
   display.display();
 
   pinMode(BUZZER_PIN, OUTPUT);
-  noTone(BUZZER_PIN);
+  digitalWrite(BUZZER_PIN, LOW);
 
   if (!initAPDS()) {
     oledShowAction("APDS FAIL");
@@ -510,18 +504,28 @@ void loop() {
   }
 
   uint8_t timeoutEvent = arcPoll();
+  //Serial.printf("[APDS] gesture detected on 1");
   if ((timeoutEvent & 0xC0) == 0x40) {
+    Serial.printf("[APDS] gesture detected on 2");
     execDirection((Dir)(timeoutEvent & 0x0F));
   }
 
   Dir d = readGestureDirection();
   if (d != DIR_NONE) {
+    Serial.printf("[TRACE] Dir d=%u\n", (unsigned)d);
+  }
+
+  if (d != DIR_NONE) {
+    Serial.printf("[APDS] gesture detected on 4");
     uint8_t evt = arcFeed(d);
     if (evt == EVT_CW) {
+      Serial.printf("[APDS] gesture detected on 5");
       execCircle(true);
     } else if (evt == EVT_CCW) {
+      Serial.printf("[APDS] gesture detected on 6");
       execCircle(false);
     } else if ((evt & 0xC0) == 0x40) {
+      Serial.printf("[APDS] gesture detected on 7");  
       execDirection((Dir)(evt & 0x0F));
     }
   }
