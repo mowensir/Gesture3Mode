@@ -12,7 +12,6 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <Adafruit_APDS9960.h>
 #include <NimBleKeyboard.h>
 #include <BleMouse.h>
 
@@ -35,12 +34,11 @@
 
 #define GESTURE_PROX_THRESH  30
 #define GESTURE_GAIN         2       // 0=1x, 1=2x, 2=4x, 3=8x
-#define GESTURE_COOLDOWN_MS  300
+#define GESTURE_COOLDOWN_MS  350
 #define ARC_STEPS_TO_CONFIRM 3
 
 /* ===================== 全局对象 ===================== */
 Adafruit_SSD1306 display(OLED_W, OLED_H, &Wire, OLED_RST);
-Adafruit_APDS9960 apds;
 
 BleKeyboard kb("GestureCtrl-Key", "SchoolProject", 100);
 BleMouse    mo("GestureCtrl-Mouse", "SchoolProject", 100);
@@ -181,17 +179,6 @@ static uint8_t arcPoll() {
   Dir solo = arcPendingDir;
   arcReset();
   return EVT_SOLO(solo);
-}
-
-// 将 APDS9960 的手势常量转换为程序内部的方向枚举，未知值返回 DIR_NONE。
-static Dir apdsToDir(uint8_t gesture) {
-  switch (gesture) {
-    case APDS9960_UP: return DIR_UP;
-    case APDS9960_DOWN: return DIR_DOWN;
-    case APDS9960_LEFT: return DIR_LEFT;
-    case APDS9960_RIGHT: return DIR_RIGHT;
-    default: return DIR_NONE;
-  }
 }
 
 /* ===================== OLED ===================== */
@@ -354,17 +341,125 @@ static void execCircle(bool cw) {
 }
 
 /* ===================== APDS 初始化 ===================== */
-// 初始化 APDS9960 并启用接近与手势检测；初始化失败时返回 false。
+// 通过原始 I2C 访问兼容 APDS9960 寄存器的传感器，不依赖库的芯片 ID 检查。
+static bool apdsWrite(uint8_t reg, uint8_t value) {
+  Wire.beginTransmission(APDS_ADDR);
+  Wire.write(reg);
+  Wire.write(value);
+  return Wire.endTransmission() == 0;
+}
+
+static bool apdsRead(uint8_t reg, uint8_t& value) {
+  Wire.beginTransmission(APDS_ADDR);
+  Wire.write(reg);
+  if (Wire.endTransmission(false) != 0) return false;
+  if (Wire.requestFrom((uint8_t)APDS_ADDR, (uint8_t)1) != 1) return false;
+  value = Wire.read();
+  return true;
+}
+
+// 从手势 FIFO 取 U/D/L/R 四路数据，稳定确认方向后只上报一次。
+static Dir readGestureDirection() {
+  static Dir candidate = DIR_NONE;
+  static Dir emitted = DIR_NONE;
+  static uint8_t stableCount = 0;
+  static uint8_t idleCount = 0;
+
+  uint8_t status;
+  if (!apdsRead(0xAF, status) || !(status & 0x01)) {
+    if (++idleCount >= 3) {
+      candidate = DIR_NONE;
+      emitted = DIR_NONE;
+      stableCount = 0;
+    }
+    return DIR_NONE;
+  }
+  idleCount = 0;
+
+  Wire.beginTransmission(APDS_ADDR);
+  Wire.write(0xFC);
+  if (Wire.endTransmission(false) != 0 ||
+      Wire.requestFrom((uint8_t)APDS_ADDR, (uint8_t)4) != 4) {
+    stableCount = 0;
+    return DIR_NONE;
+  }
+
+  uint8_t data[4];
+  for (uint8_t i = 0; i < 4; ++i) data[i] = Wire.read();
+  for (uint8_t value : data) {
+    if (value > 200) {
+      stableCount = 0;
+      return DIR_NONE;
+    }
+  }
+
+  int udDiff = (int)data[0] - (int)data[1];
+  int lrDiff = (int)data[2] - (int)data[3];
+  Dir direction = DIR_NONE;
+  if (abs(udDiff) > 20 && abs(udDiff) > abs(lrDiff)) {
+    direction = udDiff > 0 ? DIR_UP : DIR_DOWN;
+  } else if (abs(lrDiff) > 20 && abs(lrDiff) > abs(udDiff)) {
+    direction = lrDiff > 0 ? DIR_LEFT : DIR_RIGHT;
+  }
+
+  if (direction == DIR_NONE) {
+    if (++idleCount >= 3) {
+      candidate = DIR_NONE;
+      emitted = DIR_NONE;
+      stableCount = 0;
+    }
+    return DIR_NONE;
+  }
+
+  if (direction != candidate) {
+    candidate = direction;
+    stableCount = 1;
+    return DIR_NONE;
+  }
+  if (stableCount < 3) ++stableCount;
+  if (stableCount < 3 || emitted == direction) return DIR_NONE;
+
+  emitted = direction;
+  Serial.printf("[GESTURE] U:%u D:%u L:%u R:%u UD:%d LR:%d\n",
+                data[0], data[1], data[2], data[3], udDiff, lrDiff);
+  return direction;
+}
+
+// 初始化寄存器并逐步启用接近/手势检测；失败时报告具体寄存器。
 static bool initAPDS() {
-  if (!apds.begin(10, APDS9960_AGAIN_4X, APDS_ADDR, &Wire)) {
-    Serial.println(F("[APDS] begin() failed @ 0x39"));
+  uint8_t chipId;
+  if (!apdsRead(0x92, chipId)) {
+    Serial.printf("[APDS] no I2C response at 0x%02X\n", APDS_ADDR);
     return false;
   }
-  apds.enableProximity(true);
-  apds.enableGesture(true);
-  apds.setGestureProximityThreshold(GESTURE_PROX_THRESH);
-  apds.setGestureGain(GESTURE_GAIN);  // 2 = 4x
-  Serial.println(F("[APDS] init OK"));
+
+  Serial.printf("[APDS] response at 0x%02X, chip ID=0x%02X\n", APDS_ADDR, chipId);
+  if (!apdsWrite(0x80, 0x00)) return false;
+  delay(100);
+
+  const uint8_t config[][2] = {
+    {0x8F, 0x00}, {0x81, 0xF6}, {0x83, 0xFF}, {0x8D, 0x00},
+    {0xA0, GESTURE_PROX_THRESH},
+    {0xA1, (uint8_t)(GESTURE_PROX_THRESH * 3 / 4)},
+    {0xA2, 0x40}, {0xA3, (uint8_t)((GESTURE_GAIN & 0x03) << 5)},
+    {0xA6, 0x00}, {0xAA, 0x00}, {0xAB, 0x00}
+  };
+  for (const auto& setting : config) {
+    if (!apdsWrite(setting[0], setting[1])) {
+      Serial.printf("[APDS] write failed at register 0x%02X\n", setting[0]);
+      return false;
+    }
+  }
+
+  if (!apdsWrite(0x80, 0x01)) return false;
+  delay(300);
+  if (!apdsWrite(0x80, 0x05)) return false;
+  delay(300);
+  if (!apdsWrite(0x80, 0x45)) return false;
+  delay(300);
+  if (!apdsWrite(0xAB, 0x01)) return false;
+
+  Serial.println(F("[APDS] raw-register init OK"));
   return true;
 }
 
@@ -376,6 +471,7 @@ void setup() {
   Serial.println(F("\nGesture-BLE Controller booting..."));
 
   Wire.begin(OLED_SDA, OLED_SCL);
+  Wire.setClock(100000);
 
   if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
     Serial.println(F("[OLED] begin() failed! Halting."));
@@ -418,19 +514,15 @@ void loop() {
     execDirection((Dir)(timeoutEvent & 0x0F));
   }
 
-  uint8_t g = apds.readGesture();
-  if (g != 0) {
-    Dir d = apdsToDir(g);
-
-    if (d != DIR_NONE) {
-      uint8_t evt = arcFeed(d);
-      if (evt == EVT_CW) {
-        execCircle(true);
-      } else if (evt == EVT_CCW) {
-        execCircle(false);
-      } else if ((evt & 0xC0) == 0x40) {
-        execDirection((Dir)(evt & 0x0F));
-      }
+  Dir d = readGestureDirection();
+  if (d != DIR_NONE) {
+    uint8_t evt = arcFeed(d);
+    if (evt == EVT_CW) {
+      execCircle(true);
+    } else if (evt == EVT_CCW) {
+      execCircle(false);
+    } else if ((evt & 0xC0) == 0x40) {
+      execDirection((Dir)(evt & 0x0F));
     }
   }
 
