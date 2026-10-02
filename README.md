@@ -1,107 +1,146 @@
-# 手势蓝牙控制器（Gesture-BLE Controller）
+# Gesture 3Mode - ESP32 三模式手势蓝牙控制器
 
-基于 ESP32 + APDS9960/PAJ9960U2 手势传感器 + SSD1306 OLED + BLE HID 的三模式无线控制器，可用作 PPT 翻页器、电脑鼠标、安卓媒体遥控器。
+这是一个基于 ESP32 + SSD1306 OLED + APDS9960 手势传感器 + BLE HID 的三模式无线控制器。当前代码实现了一个单一的 HID 设备名为 `Gesture3Mode`，通过 BOOT 键切换模式，并可用于电脑键盘控制、电脑鼠标控制和安卓/桌面媒体控制。
 
-## 功能一览
+## 功能概览
 
-| 模式 | 顺/逆时针 | 上 | 下 | 左 | 右 |
-| --- | --- | --- | --- | --- | --- |
-| ① 电脑键盘 (PPT) | 顺=下页 / 逆=上页 | PageUp | PageDown | ← | Enter |
-| ② 电脑鼠标 | 顺=滚轮上 / 逆=滚轮下 | 光标上 | 光标下 | 光标左 | 左键单击 |
-| ③ 安卓媒体 | 顺=音量+ / 逆=音量- | 音量+ | 音量- | 上一曲 | 下一曲 |
+| 模式 | 手势 | 动作 |
+| --- | --- | --- |
+| 1.Keyboard | 上 | PageUp |
+| 1.Keyboard | 下 | PageDown |
+| 1.Keyboard | 左 | Left Arrow |
+| 1.Keyboard | 右 | Enter |
+| 2.Mouse | 顺时针圆弧 (CW) | 滚轮向上 |
+| 2.Mouse | 逆时针圆弧 (CCW) | 滚轮向下 |
+| 2.Mouse | 上 | 鼠标向上移动 |
+| 2.Mouse | 下 | 鼠标向下移动 |
+| 2.Mouse | 左 | 鼠标向左移动 |
+| 2.Mouse | 右 | 鼠标向右移动 |
+| 2.Mouse | 接近度触发 | 左键单击 |
+| 3.Media | 上 | 音量+ |
+| 3.Media | 下 | 音量- |
+| 3.Media | 左 | 上一曲 |
+| 3.Media | 右 | 下一曲 |
+| 3.Media | 接近度触发 | 播放/暂停 |
 
-短按开发板自带 **BOOT 键 (GPIO0)** 循环切换三种模式；OLED 实时显示当前模式与蓝牙连接状态；每次有效动作触发蜂鸣器短促提示音。
+说明：
+- 短按开发板自带 `BOOT` 键（GPIO0）循环切换 `1.Keyboard -> 2.Mouse -> 3.Media -> 1.Keyboard`。
+- OLED 会显示当前模式、最近手势和 `BOOT=switch`。
+- 每次有效动作都会发出一次短促蜂鸣提示。
+- BLE 设备名称固定为 `Gesture3Mode`，通过 HID 报告提供键盘、鼠标和媒体功能。
 
-## 硬件清单与接线
+## 硬件连接
 
 | 模块 | 引脚 | ESP32 | 说明 |
 | --- | --- | --- | --- |
 | OLED SSD1306 | GND | GND | 共地 |
-|  | VCC | 3V3 | 0.96" 模块通常 3.3V/5V 均可，建议 3V3 |
-|  | SDA | GPIO21 | I²C 数据 |
-|  | SCL | GPIO22 | I²C 时钟 |
+|  | VCC | 3V3 | 推荐 3.3V |
+|  | SDA | GPIO21 | I²C 数据线 |
+|  | SCL | GPIO22 | I²C 时钟线 |
 | APDS9960 / 兼容模块 | GND | GND | 共地 |
-|  | VCC | 3V3 | 务必 3.3V，不可接 5V |
-|  | SDA | GPIO21 | 与 OLED 并联在同一 I²C 总线 |
-|  | SCL | GPIO22 | 与 OLED 并联在同一 I²C 总线 |
-|  | INT | GPIO4（可选） | 本工程采用轮询，可不接 |
-| 蜂鸣器 | I/O | GPIO5 | 无源蜂鸣器，`tone()` 给频率 |
-| BOOT 键 | — | GPIO0 | 开发板自带，用作模式切换键 |
+|  | VCC | 3V3 | 必须 3.3V，不可接 5V |
+|  | SDA | GPIO21 | 与 OLED 共用 I²C |
+|  | SCL | GPIO22 | 与 OLED 共用 I²C |
+|  | INT | GPIO4 | 可选，当前代码采用轮询 |
+| 蜂鸣器 | I/O | GPIO5 | 连接无源蜂鸣器 |
+| BOOT 键 | — | GPIO0 | 开发板自带，作为模式切换按钮 |
 
-> I²C 地址：OLED 默认 `0x3C`（背面焊盘若在 `0x7A` 侧则为 `0x3D`）；APDS9960 默认 `0x39`。并联在同一总线不冲突。
+> I²C 地址：OLED 默认 `0x3C`，APDS9960 默认 `0x39`。代码中均以这两个地址进行初始化和读写。
 
-手势传感器通过 I²C 地址 `0x39` 通信。程序先读取 `0x92` 芯片 ID：标准 APDS-9960 的 ID 应为 `0xAB`，此时使用 Adafruit 库初始化；其他非 `0x00`/`0xFF` ID 会走按 APDS9960 寄存器映射执行的兼容初始化。兼容模块必须支持相同寄存器布局，且其实际手势行为仍需实机确认。
+## 代码中的实际行为
 
-手势数据由程序按数据手册读取 `GSTATUS (0xAF)`、`GFLVL (0xAE)` 和手势 FIFO (`0xFC`–`0xFF`)；FIFO 每组包含 U、D、L、R 四字节，最多 32 组。检测到 FIFO 溢出时会丢弃该批样本并重置方向累积，避免用不完整轨迹误判。串口监视器使用 115200 波特率，可查看芯片 ID、寄存器读回校验、识别方向及 FIFO 错误。
+### 1. APDS9960 初始化
+
+工程会先读取传感器 `0x92` 处的 chip ID：
+- 若为标准 APDS9960，ID 为 `0xAB`，调用 `apds.begin()` 初始化。
+- 若为非标准/兼容模块，代码会绕过 `Adafruit_APDS9960.begin()`，直接按 APDS9960 寄存器映射执行初始化。
+
+初始化过程包括：
+- 读取 `GSTATUS (0xAF)` / `GFLVL (0xAE)` / 手势 FIFO (`0xFC`–`0xFF`)
+- 通过寄存器写入校验，确认接近度和手势引擎已启用
+- 检查 `ENABLE` 寄存器是否为 `0x45`，即 `proximity + gesture enabled`
+
+### 2. 圆弧识别
+
+代码使用一个 `arcQueue` 和 `checkArc()` 来识别顺时针/逆时针手势：
+- 方向按 `UP / RIGHT / DOWN / LEFT` 的相邻关系构成顺时针序列
+- 方向按 `UP / LEFT / DOWN / RIGHT` 的相邻关系构成逆时针序列
+- 只要连续方向符合一条圆周序列，便判定为 `G_CW` 或 `G_CCW`
+- 如果没有形成完整圆弧，则按单向手势处理
+
+这意味着：
+- 单方向手势用于即时控制（如按键、鼠标移动、媒体按键）
+- 圆弧手势用于滚轮动作（鼠标模式）
+
+### 3. BLE HID
+
+当前代码使用 `NimBLE-Arduino` + `NimBLEHIDDevice`，在设备启动时：
+- 创建 GATT server
+- 注册键盘、鼠标、媒体 3 个 HID report
+- 以 `Gesture3Mode` 名称广播并提供 HID service
+
+代码中连接实际使用的是一个设备名，而不是按模式拆分成多个蓝牙设备。
 
 ## 工程结构
 
-```
+```text
 GestureBleController/
-├── platformio.ini        # PlatformIO 配置 + 依赖库
+├── platformio.ini
 ├── README.md
+├── lib/
+│   └── NimBLEMouse/
 └── src/
-    └── main.cpp          # 主程序（含顺/逆圆弧状态机）
+    └── main.cpp
 ```
 
 ## 编译与烧录
 
-1. 安装 [PlatformIO](https://platformio.org/)（VS Code 插件或 CLI）。
-2. 用数据线（非纯充电线）把 ESP32 插到电脑。
-3. 打开本工程目录，点击底部 **→ (Upload)** 或执行 `pio run -t upload`。
-4. 终端出现 `Writing at 0x... (100%)` + `Hard resetting via RTS pin...` + `[SUCCESS]` 即成功。
-5. 点击底部 **插头图标** 打开串口监视器（波特率 115200），观察初始化日志。
+1. 安装 [PlatformIO](https://platformio.org/)。
+2. 用 USB 数据线连接 ESP32。
+3. 在工程目录运行：
 
-烧录后 ESP32 会自动复位并运行程序，无需手动重启。若终端卡在 `Connecting...`，按住 BOOT 再点一次 EN，或在 Upload 刚出 `Connecting...` 时按住 BOOT 直到出现 `Writing` 再松。
+```bash
+pio run -t upload
+```
 
-## 使用流程
+4. 观察串口输出，确认以下日志正常：
+- `[Sensor] I2C device at 0x39 responded; chip ID=0xXX`
+- `[Sensor] Standard APDS9960 initialization succeeded`
+- `[BLE] HID service started and advertising as Gesture3Mode`
 
-1. 上电后 OLED 显示当前模式，例如 `Mode1: PC KEY (PPT)`，下方显示 `BLE waiting...`。
-2. 配对前先用 BOOT 键切换到要使用的模式：每短按一次按 Mode 1 → Mode 2 → Mode 3 → Mode 1 循环。Mode 1（电脑键盘）和 Mode 3（安卓媒体）使用 `GestureCtrl-Key`；Mode 2（电脑鼠标）使用 `GestureCtrl-Mouse`。手机媒体控制请选择 Mode 3；开机显示 Mode 1 时，短按 BOOT 两次即可切到 Mode 3。
-3. 在电脑或手机的蓝牙设置中搜索并配对当前模式对应的名称：键盘/安卓媒体模式选 `GestureCtrl-Key`，鼠标模式选 `GestureCtrl-Mouse`。
-4. 配对成功后 OLED 显示 `BLE connected`。
-5. 在目标设备前 5cm 左右挥动手势；手不要太远、也不要贴太近导致饱和。
-6. 短按 BOOT 键可切换模式，蜂鸣一声表示切换成功；首次使用另一种蓝牙名称时，需在目标设备上配对该名称。
+5. 打开串口监视器，波特率设为 `115200`。
 
-## 核心实现：顺/逆圆弧状态机
+### 烧录异常处理
 
-APDS9960 原生只会上报「上/下/左/右」四方向，没有直接的顺时针/逆时针事件。本工程用**方向序列步进计数**识别圆弧：
+如果 Upload 阶段卡在 `Connecting...`：
+- 按住 BOOT 键
+- 再短按 EN（复位）
+- 等到 `Writing` 开始后松开 BOOT
 
-- **三段式状态**：`IDLE` → 收到第一帧进入 `PENDING`（等待确认是孤立方向还是圆弧起点）→ 第二帧与起点相邻则进入 `ARC`，否则 160ms 内无后续即提交为单方向。
-- **步进判定**：右→下→左→上→右 视为顺时针步进，右→上→左→下→右 视为逆时针步进。
-- **完成确认**：圆弧阶段连续累计 **3 个同方向步进**即判定为顺时针/逆时针完成，立即触发对应动作。
-- **容错**：出现折回方向（如右→左）则作废当前圆弧、把折回那帧作为新起点；900ms 无进展也自动作废，避免长时间误判。
+## 使用方法
 
-这样既能让「上/下/左/右」单方向即时响应（PPT 方向键、鼠标移动），又能让「画圈」动作映射到翻页/滚轮/音量，兼顾实时性与手势丰富度。
+1. 上电后，OLED 会显示当前模式，例如 `Mode: 1.Keyboard`。
+2. 通过短按 `BOOT` 键切换模式。`BOOT` 触发间隔需要大于约 `280ms`，否则会忽略抖动。
+3. 使用蓝牙设备搜索并连接 `Gesture3Mode`。
+4. 站在设备前约 5cm 左右挥手，手不要太近或太远，避免接近度饱和。
+5. 若在鼠标模式时接近度超过阈值，会触发左键单击；媒体模式会触发播放/暂停。
 
-可调参数集中在 `main.cpp` 顶部：
+## 调试建议
 
-| 参数 | 含义 | 建议值 |
-| --- | --- | --- |
-| `GESTURE_PROX_THRESH` | 手势入口接近阈值，越大越要手很近 | 30 |
-| `GESTURE_GAIN` | APDS9960 手势增益寄存器值（2=4×） | 2 |
-| `GESTURE_COOLDOWN_MS` | 两次有效动作最小间隔，防连发 | 350 |
-| `ARC_STEPS_TO_CONFIRM` | 连续步进数达到此值确认圆弧 | 3 |
-| `SOLO_TIMEOUT_MS` | 第一帧判为单方向的最大等待 | 160 |
+- OLED 不亮：先单独用 SSD1306 示例程序确认 I²C 地址和接线；若模块焊盘在 `0x7A` 侧，可能需要检查实际地址。
+- APDS 初始化失败：查看串口输出 `[Sensor] No I2C response at 0x39`，检查 3.3V、电源地、SDA/SCL 接线，以及模块是否兼容 APDS9960 寄存器布局。
+- 手势不灵敏：观察 `[Gesture] Sensor raw value=...` 日志，调整手势距离和挥动轨迹。
+- BLE 连接异常：确认目标设备蓝牙已打开，并处于可配对状态；设备名称为 `Gesture3Mode`。
+- 误触发：`handleProximity()` 中的阈值为 `150`，如果环境较灵敏，可适当微调。
 
-若识别太灵敏就增大 `GESTURE_PROX_THRESH` / 降低增益，识别不到就反向调整；若一次挥手翻多页就增大 `GESTURE_COOLDOWN_MS`。
-
-## 调试要点
-
-- **OLED 不亮**：先单独跑 Adafruit 的 `ssd1306_128x64_i2c` 示例确认接线和地址；背面焊盘在 `0x7A` 侧时把 `OLED_ADDR` 改为 `0x3D`。
-- **APDS 初始化失败**：串口若打印 `[APDS] no I2C response at 0x39`，用 I²C 扫描确认地址，并核对 3.3V 供电、共地及 SDA/SCL 接线；若显示寄存器写入失败，确认模块支持 APDS9960 寄存器映射。成功时会显示芯片 ID 和 `[APDS] raw-register init OK`。
-- **手势不触发或误触发**：看串口日志的 `[GESTURE]` 行；挥手时保持 5cm 左右、手势轨迹尽量走圆弧而非折线。
-- **BLE 连不上**：确认电脑/手机蓝牙已开启；首次配对可能需几秒。键盘使用 `ESP32-NIMBLE-Keyboard`，鼠标使用项目内修复版 `lib/NimBLEMouse`，二者共用 `NimBLE-Arduino`。
-- **烧录/运行时注意**：BOOT(GPIO0) 仅在**复位/上电瞬间**决定进入下载模式；正常运行时把它作为模式切换键不会影响烧录。若 GPIO0 被外部电路强拉，可能导致无法进入下载模式。
-
-## 依赖库
+## 依赖项
 
 - `adafruit/Adafruit SSD1306`
 - `adafruit/Adafruit GFX Library`
+- `adafruit/Adafruit APDS9960`
 - `h2zero/NimBLE-Arduino`
-- `webmonkey/ESP32-NIMBLE-Keyboard`
-- `lib/NimBLEMouse`
+- `lib/NimBLEMouse`（本项目内自定义/修补版本）
 
-## License
+## 许可证
 
-代码按 MIT 协议开放，可自由用于学习与非商业项目。各第三方库请遵守其各自的许可证。
+本项目代码采用 MIT 开源协议，供学习和非商业用途参考。第三方库请遵守其各自许可证条款。
