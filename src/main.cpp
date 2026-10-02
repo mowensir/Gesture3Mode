@@ -5,7 +5,6 @@
  * 模式切换：BOOT键(GPIO0)短按
  * 蜂鸣器：PWM非阻塞
  * 手势：圆弧状态机（顺/逆时针）+ 接近度
- * 2026-06-15
  */
 
 #include <Arduino.h>
@@ -185,6 +184,10 @@ uint8_t readSensorGesture() {
         return 0;
         
     }
+    if ((status & 0x01) == 0 && !fifoOverflow) {
+        return 0;
+    }
+
     uint8_t detectedGesture = 0;
     for (uint8_t i = 0; i < fifoLevel; ++i) {
         Wire.beginTransmission(APDS_ADDR);
@@ -250,19 +253,20 @@ enum GDir { G_NONE, G_UP, G_DOWN, G_LEFT, G_RIGHT, G_CW, G_CCW };
 
 // ==================== 圆弧状态机 ====================
 #define ARC_MAX 6
+#define ARC_TIMEOUT_MS 500
 GDir arcQueue[ARC_MAX];
 int arcLen = 0;
+unsigned long arcLastGestureMs = 0;
 
-void arcReset() { arcLen = 0; }
+void arcReset() {
+    arcLen = 0;
+    arcLastGestureMs = 0;
+}
 
 void arcPush(GDir d) {
-    if (d == G_NONE) return;
-    if (arcLen > 0 && arcQueue[arcLen - 1] == d) return;
-    if (arcLen >= ARC_MAX) {
-        memmove(arcQueue, arcQueue + 1, (ARC_MAX - 1) * sizeof(GDir));
-        arcLen--;
+    if (d != G_NONE && arcLen < ARC_MAX) {
+        arcQueue[arcLen++] = d;
     }
-    arcQueue[arcLen++] = d;
 }
 
 bool isCW(GDir a, GDir b) {
@@ -295,6 +299,28 @@ GDir checkArc() {
     if (cw) return G_CW;
     if (ccw) return G_CCW;
     return G_NONE;
+}
+
+bool isArcCandidate() {
+    if (arcLen < 2) return true;
+    bool cw = true, ccw = true;
+    for (int i = 1; i < arcLen; i++) {
+        if (!isCW(arcQueue[i - 1], arcQueue[i])) cw = false;
+        if (!isCCW(arcQueue[i - 1], arcQueue[i])) ccw = false;
+    }
+    return cw || ccw;
+}
+
+const char* gestureName(GDir gesture) {
+    switch (gesture) {
+        case G_UP:    return "UP";
+        case G_DOWN:  return "DOWN";
+        case G_LEFT:  return "LEFT";
+        case G_RIGHT: return "RIGHT";
+        case G_CW:    return "CW";
+        case G_CCW:   return "CCW";
+        default:      return "?";
+    }
 }
 
 // ==================== BLE 复合 HID ====================
@@ -643,7 +669,6 @@ void loop() {
     handleProximity(proximity);
 
     // ---- 手势读取 ----
-    static unsigned long lastGestureMs = 0;
     uint8_t raw = readSensorGesture();
     GDir dir = G_NONE;
     if (raw) {
@@ -658,26 +683,48 @@ void loop() {
         Serial.printf("[Gesture] Sensor raw value=0x%02X, direction=%s\n", raw, rawName);
     }
 
-    arcPush(dir);
-    GDir finalGesture = checkArc();
-    if (finalGesture == G_NONE && dir != G_NONE) {
-        finalGesture = dir;
+    GDir gesturesToExecute[ARC_MAX + 1];
+    uint8_t gestureCount = 0;
+
+    if (currentMode == MODE_MOUSE && arcLen > 0 &&
+        millis() - arcLastGestureMs >= ARC_TIMEOUT_MS) {
+        for (int i = 0; i < arcLen; i++) {
+            gesturesToExecute[gestureCount++] = arcQueue[i];
+        }
+        arcReset();
     }
 
-    if (finalGesture != G_NONE && (millis() - lastGestureMs > 350)) {
-        lastGestureMs = millis();
-        executeGesture(finalGesture);
-        const char* txt = "?";
-        switch (finalGesture) {
-            case G_UP:    txt = "UP";    break;
-            case G_DOWN:  txt = "DOWN";  break;
-            case G_LEFT:  txt = "LEFT";  break;
-            case G_RIGHT: txt = "RIGHT"; break;
-            case G_CW:    txt = "CW";    break;
-            case G_CCW:   txt = "CCW";   break;
-            default: break;
+    if (dir != G_NONE) {
+        if (currentMode != MODE_MOUSE) {
+            arcReset();
+            gesturesToExecute[gestureCount++] = dir;
+        } else if (arcLen == 0) {
+            arcPush(dir);
+            arcLastGestureMs = millis();
+        } else {
+            arcPush(dir);
+            if (!isArcCandidate()) {
+                for (int i = 0; i < arcLen - 1; i++) {
+                    gesturesToExecute[gestureCount++] = arcQueue[i];
+                }
+                GDir latestDirection = arcQueue[arcLen - 1];
+                arcReset();
+                arcPush(latestDirection);
+                arcLastGestureMs = millis();
+            } else {
+                arcLastGestureMs = millis();
+                GDir arcGesture = checkArc();
+                if (arcGesture != G_NONE) {
+                    gesturesToExecute[gestureCount++] = arcGesture;
+                    arcReset();
+                }
+            }
         }
-        oledShow(txt);
+    }
+
+    for (uint8_t i = 0; i < gestureCount; i++) {
+        executeGesture(gesturesToExecute[i]);
+        oledShow(gestureName(gesturesToExecute[i]));
     }
 
     // 定期刷新OLED
