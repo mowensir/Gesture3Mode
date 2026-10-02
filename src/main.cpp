@@ -5,6 +5,7 @@
  * 模式切换：BOOT键(GPIO0)短按
  * 蜂鸣器：PWM非阻塞
  * 手势：圆弧状态机（顺/逆时针）+ 接近度
+ * 2026-06-15
  */
 
 #include <Arduino.h>
@@ -85,9 +86,10 @@ bool writeRegChecked(uint8_t reg, uint8_t val) {
 
 bool configureGestureRegisters() {
     bool ok = true;
-    ok &= writeRegChecked(0x8F, 0x00); // CONTROL：1x proximity gain，100 mA LED drive
-    ok &= writeRegChecked(0xA0, 0x28); // GPENTH：手势进入阈值 40
-    ok &= writeRegChecked(0xA1, 0x1E); // GEXTH：手势退出阈值 30
+    ok &= writeRegChecked(0x8F, 0x08); // CONTROL：4x proximity gain，100 mA LED drive
+    ok &= writeRegChecked(0x8E, 0x87); // PPULSE：16 us，8 个 proximity LED 脉冲
+    ok &= writeRegChecked(0xA0, 0x06); // GPENTH：低反射兼容芯片进入阈值 6
+    ok &= writeRegChecked(0xA1, 0x03); // GEXTH：退出阈值 3
     ok &= writeRegChecked(0xA2, 0x40); // GCONF1：FIFO 达到 4 组数据后报告有效
     ok &= writeRegChecked(0xA3, 0x20); // GCONF2：2x 手势增益
     ok &= writeRegChecked(0xA6, 0x81); // GPULSE：2 个 16 us 脉冲（计数值 + 1），与厂家示例一致
@@ -137,7 +139,6 @@ uint8_t readSensorGesture() {
     static uint8_t leftCount = 0;
     static uint8_t rightCount = 0;
     static unsigned long lastMotionMs = 0;
-
     uint8_t status = 0;
     if (!readReg(0xAF, status)) {
         static unsigned long lastErrorMs = 0;
@@ -147,7 +148,6 @@ uint8_t readSensorGesture() {
         }
         return 0;
     }
-
     const bool fifoOverflow = (status & 0x02) != 0;
     if (fifoOverflow) {
         static unsigned long lastOverflowLogMs = 0;
@@ -156,7 +156,6 @@ uint8_t readSensorGesture() {
             Serial.println("[Sensor] Gesture FIFO overflow; some samples were lost");
         }
     }
-
     uint8_t fifoLevel = 0;
     if (!readReg(0xAE, fifoLevel)) {
         Serial.println("[Sensor] Failed to read gesture FIFO level register 0xAE");
@@ -167,13 +166,25 @@ uint8_t readSensorGesture() {
         return 0;
     }
     if (fifoLevel == 0) {
+        static unsigned long lastIdleLogMs = 0;
+        if (millis() - lastIdleLogMs >= 1000) {
+            lastIdleLogMs = millis();
+            uint8_t enable = 0;
+            uint8_t gestureConfig = 0;
+            uint8_t proximity = 0;
+            readReg(0x80, enable);
+            readReg(0xAB, gestureConfig);
+            readReg(0x9C, proximity);
+            Serial.printf("[Gesture] idle: GSTATUS=0x%02X GFLVL=%u ENABLE=0x%02X GCONF4=0x%02X PROX=%u\n",
+                          status, fifoLevel, enable, gestureConfig, proximity);
+        }
         if (lastMotionMs != 0 && millis() - lastMotionMs > 300) {
             upCount = downCount = leftCount = rightCount = 0;
             lastMotionMs = 0;
         }
         return 0;
+        
     }
-
     uint8_t detectedGesture = 0;
     for (uint8_t i = 0; i < fifoLevel; ++i) {
         Wire.beginTransmission(APDS_ADDR);
@@ -217,7 +228,6 @@ uint8_t readSensorGesture() {
             lastMotionMs = 0;
         }
     }
-
     if (fifoOverflow) {
         upCount = downCount = leftCount = rightCount = 0;
         lastMotionMs = 0;
@@ -685,7 +695,7 @@ void loop() {
             NimBLEAdvertising* advertising = bleServer->getAdvertising();
             Serial.printf("[BLE status] connections=%u, advertising=%s\n",
                           bleServer->getConnectedCount(),
-                          advertising && advertising->isAdvertising() ? "进行中" : "未广播");
+                          advertising && advertising->isAdvertising() ? "contine..." : "advertising stopped");
         }
     }
 
