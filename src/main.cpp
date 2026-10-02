@@ -1,581 +1,693 @@
 /*
- * 手势蓝牙控制器 v2.0（定稿版）
- * 硬件：ESP32 + APDS9960/PAJ9960U2 + 0.96" SSD1306 OLED + 无源蜂鸣器
- * 功能：三模式 BLE HID，短按 BOOT(GPIO0) 切换
- *       模式1 电脑键盘（PPT翻页：上/下=PageUp/Down，左=←，右=Enter）
- *       模式2 电脑鼠标（方向=光标±20，靠近=左键，顺/逆时针=滚轮）
- *       模式3 安卓媒体（方向=音量±/上一曲/下一曲，顺/逆时针=音量±）
- * 圆弧判定：三种模式均启用，连续3个相邻方向步进确认一次圆弧
+ * 三模式手势控制器 - 最终定稿
+ * 硬件：ESP32 + OLED(0x3C) + APDS9960(0x39) + 无源蜂鸣器(GPIO5)
+ * 蓝牙复合HID：键盘、鼠标、媒体
+ * 模式切换：BOOT键(GPIO0)短按
+ * 蜂鸣器：PWM非阻塞
+ * 手势：圆弧状态机（顺/逆时针）+ 接近度
  */
 
 #include <Arduino.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <NimBleKeyboard.h>
-#include <BleMouse.h>
+#include <Adafruit_APDS9960.h>
+#include <NimBLEDevice.h>
+#include <NimBLEHIDDevice.h>
+#include <NimBLECharacteristic.h>
+#include <string.h>
 
-/* ===================== 引脚与参数 ===================== */
-#define OLED_SDA             21
-#define OLED_SCL             22
-#define OLED_RST             -1
-#ifndef OLED_ADDR
-#define OLED_ADDR            0x3C
-#endif
-#define OLED_W               128
-#define OLED_H               64
+// ==================== 引脚定义 ====================
+#define OLED_SDA    21
+#define OLED_SCL    22
+#define OLED_ADDR   0x3C
+#define SCREEN_W    128
+#define SCREEN_H    64
+#define BUZZER_PIN  5
+#define BOOT_PIN    0
+#define APDS_ADDR   0x39
 
-#ifndef APDS_ADDR
-#define APDS_ADDR            0x39
-#endif
+// ==================== 蜂鸣器PWM ====================
+#define BUZZER_CHANNEL 0
+#define BUZZER_FREQ    4000
+#define BUZZER_RES     8
+static unsigned long beepEndMs = 0;
 
-#define BUZZER_PIN           5
-#define BOOT_PIN             0
+void beepNonBlock(int ms) {
+    ledcWrite(BUZZER_CHANNEL, 128); // 50%占空比
+    beepEndMs = millis() + ms;
+}
 
-#define GESTURE_PROX_THRESH  0x40
-#define GESTURE_GAIN         0       // 0=1x, 1=2x, 2=4x, 3=8x
-#define GESTURE_COOLDOWN_MS  350
-#define ARC_STEPS_TO_CONFIRM 3
+// ==================== OLED ====================
+Adafruit_SSD1306 display(SCREEN_W, SCREEN_H, &Wire, -1);
+bool oledOK = false;
 
-/* ===================== 全局对象 ===================== */
-Adafruit_SSD1306 display(OLED_W, OLED_H, &Wire, OLED_RST);
+// ==================== APDS9960 ====================
+Adafruit_APDS9960 apds;
 
-BleKeyboard kb("GestureCtrl-Key", "SchoolProject", 100);
-BleMouse    mo("GestureCtrl-Mouse", "SchoolProject", 100);
+bool writeReg(uint8_t reg, uint8_t val) {
+    Wire.beginTransmission(APDS_ADDR);
+    Wire.write(reg);
+    Wire.write(val);
+    return (Wire.endTransmission() == 0);
+}
 
-enum Mode : uint8_t {
-  MODE_PC_KEY   = 1,
-  MODE_PC_MOUSE = 2,
-  MODE_ANDROID  = 3
+bool readReg(uint8_t reg, uint8_t& val) {
+    Wire.beginTransmission(APDS_ADDR);
+    Wire.write(reg);
+    if (Wire.endTransmission(false) != 0 ||
+        Wire.requestFrom((uint8_t)APDS_ADDR, (uint8_t)1) != 1) {
+        return false;
+    }
+    val = Wire.read();
+    return true;
+}
+
+bool writeRegChecked(uint8_t reg, uint8_t val) {
+    if (!writeReg(reg, val)) {
+        Serial.printf("[Sensor] Register 0x%02X write failed\n", reg);
+        return false;
+    }
+
+    uint8_t actual = 0;
+    if (!readReg(reg, actual)) {
+        Serial.printf("[Sensor] Register 0x%02X read-back failed\n", reg);
+        return false;
+    }
+    if (actual != val) {
+        Serial.printf("[Sensor] Register 0x%02X mismatch: wrote 0x%02X, read 0x%02X\n",
+                      reg, val, actual);
+        return false;
+    }
+    Serial.printf("[Sensor] Register 0x%02X verified: 0x%02X\n", reg, actual);
+    return true;
+}
+
+bool configureGestureRegisters() {
+    bool ok = true;
+    ok &= writeRegChecked(0x8F, 0x00); // CONTROL：1x proximity gain，100 mA LED drive
+    ok &= writeRegChecked(0xA0, 0x28); // GPENTH：手势进入阈值 40
+    ok &= writeRegChecked(0xA1, 0x1E); // GEXTH：手势退出阈值 30
+    ok &= writeRegChecked(0xA2, 0x40); // GCONF1：FIFO 达到 4 组数据后报告有效
+    ok &= writeRegChecked(0xA3, 0x20); // GCONF2：2x 手势增益
+    ok &= writeRegChecked(0xA6, 0x81); // GPULSE：2 个 16 us 脉冲（计数值 + 1），与厂家示例一致
+    ok &= writeRegChecked(0xAA, 0x00); // GCONF3：启用上下、左右两组光电二极管
+    ok &= writeRegChecked(0xAB, 0x00); // GCONF4：先退出手势模式，再由库启动
+    return ok;
+}
+
+bool initializeCompatibleApds() {
+    // 兼容芯片 ID 不同，直接按 APDS9960 寄存器初始化，不依赖 begin() 的 ID 检查副作用。
+    if (!writeRegChecked(0x80, 0x00)) return false;
+    delay(10);
+
+    bool ok = true;
+    ok &= writeRegChecked(0x81, 0xFC); // ATIME：约 11.12 ms 积分时间
+    ok &= writeRegChecked(0x83, 0xFF); // WTIME：最短等待时间
+    ok &= configureGestureRegisters();
+    if (!ok) return false;
+
+    if (!writeRegChecked(0x80, 0x01)) return false; // 仅上电
+    delay(10);
+    if (!writeRegChecked(0x80, 0x05)) return false; // 上电 + 接近度
+    delay(10);
+    if (!writeRegChecked(0x80, 0x45)) return false; // 上电 + 接近度 + 手势引擎
+    if (!writeRegChecked(0xAB, 0x01)) return false; // 启动手势状态机
+
+    Serial.println("[Sensor] Compatible APDS9960-register initialization complete");
+    return true;
+}
+
+uint8_t readSensorProximity() {
+    uint8_t proximity = 0;
+    if (!readReg(0x9C, proximity)) {
+        static unsigned long lastErrorMs = 0;
+        if (millis() - lastErrorMs >= 1000) {
+            lastErrorMs = millis();
+            Serial.println("[Sensor] Failed to read proximity register 0x9C");
+        }
+        return 0;
+    }
+    return proximity;
+}
+
+uint8_t readSensorGesture() {
+    static uint8_t upCount = 0;
+    static uint8_t downCount = 0;
+    static uint8_t leftCount = 0;
+    static uint8_t rightCount = 0;
+    static unsigned long lastMotionMs = 0;
+
+    uint8_t status = 0;
+    if (!readReg(0xAF, status)) {
+        static unsigned long lastErrorMs = 0;
+        if (millis() - lastErrorMs >= 1000) {
+            lastErrorMs = millis();
+            Serial.println("[Sensor] Failed to read gesture status register 0xAF");
+        }
+        return 0;
+    }
+
+    const bool fifoOverflow = (status & 0x02) != 0;
+    if (fifoOverflow) {
+        static unsigned long lastOverflowLogMs = 0;
+        if (millis() - lastOverflowLogMs >= 1000) {
+            lastOverflowLogMs = millis();
+            Serial.println("[Sensor] Gesture FIFO overflow; some samples were lost");
+        }
+    }
+
+    uint8_t fifoLevel = 0;
+    if (!readReg(0xAE, fifoLevel)) {
+        Serial.println("[Sensor] Failed to read gesture FIFO level register 0xAE");
+        return 0;
+    }
+    if (fifoLevel > 32) {
+        Serial.printf("[Sensor] Invalid gesture FIFO level: %u\n", fifoLevel);
+        return 0;
+    }
+    if (fifoLevel == 0) {
+        if (lastMotionMs != 0 && millis() - lastMotionMs > 300) {
+            upCount = downCount = leftCount = rightCount = 0;
+            lastMotionMs = 0;
+        }
+        return 0;
+    }
+
+    uint8_t detectedGesture = 0;
+    for (uint8_t i = 0; i < fifoLevel; ++i) {
+        Wire.beginTransmission(APDS_ADDR);
+        Wire.write(0xFC);
+        if (Wire.endTransmission(false) != 0 ||
+            Wire.requestFrom((uint8_t)APDS_ADDR, (uint8_t)4) != 4) {
+            Serial.println("[Sensor] Failed to read a complete UDLR FIFO sample");
+            while (Wire.available()) Wire.read();
+            break;
+        }
+
+        const int up = Wire.read();
+        const int down = Wire.read();
+        const int left = Wire.read();
+        const int right = Wire.read();
+        if (detectedGesture != 0 || fifoOverflow) continue;
+
+        const int upDownDiff = (abs(up - down) > 13) ? up - down : 0;
+        const int leftRightDiff = (abs(left - right) > 13) ? left - right : 0;
+        if (upDownDiff == 0 && leftRightDiff == 0) continue;
+        lastMotionMs = millis();
+
+        if (upDownDiff < 0) {
+            if (downCount > 0) detectedGesture = APDS9960_UP;
+            else if (upCount < UINT8_MAX) ++upCount;
+        } else if (upDownDiff > 0) {
+            if (upCount > 0) detectedGesture = APDS9960_DOWN;
+            else if (downCount < UINT8_MAX) ++downCount;
+        }
+
+        if (leftRightDiff < 0) {
+            if (rightCount > 0) detectedGesture = APDS9960_LEFT;
+            else if (leftCount < UINT8_MAX) ++leftCount;
+        } else if (leftRightDiff > 0) {
+            if (leftCount > 0) detectedGesture = APDS9960_RIGHT;
+            else if (rightCount < UINT8_MAX) ++rightCount;
+        }
+
+        if (detectedGesture != 0) {
+            upCount = downCount = leftCount = rightCount = 0;
+            lastMotionMs = 0;
+        }
+    }
+
+    if (fifoOverflow) {
+        upCount = downCount = leftCount = rightCount = 0;
+        lastMotionMs = 0;
+        return 0;
+    }
+    if (detectedGesture == 0 && lastMotionMs != 0 && millis() - lastMotionMs > 300) {
+        upCount = downCount = leftCount = rightCount = 0;
+        lastMotionMs = 0;
+    }
+    return detectedGesture;
+}
+
+// ==================== 模式 ====================
+enum Mode : uint8_t { MODE_KB = 0, MODE_MOUSE, MODE_MEDIA, MODE_N };
+const char* modeNames[] = {"1.Keyboard", "2.Mouse", "3.Media"};
+Mode currentMode = MODE_KB;
+
+// ==================== 手势方向 ====================
+enum GDir { G_NONE, G_UP, G_DOWN, G_LEFT, G_RIGHT, G_CW, G_CCW };
+
+// ==================== 圆弧状态机 ====================
+#define ARC_MAX 6
+GDir arcQueue[ARC_MAX];
+int arcLen = 0;
+
+void arcReset() { arcLen = 0; }
+
+void arcPush(GDir d) {
+    if (d == G_NONE) return;
+    if (arcLen > 0 && arcQueue[arcLen - 1] == d) return;
+    if (arcLen >= ARC_MAX) {
+        memmove(arcQueue, arcQueue + 1, (ARC_MAX - 1) * sizeof(GDir));
+        arcLen--;
+    }
+    arcQueue[arcLen++] = d;
+}
+
+bool isCW(GDir a, GDir b) {
+    const GDir seq[] = {G_UP, G_RIGHT, G_DOWN, G_LEFT};
+    int ai = -1, bi = -1;
+    for (int i = 0; i < 4; i++) {
+        if (seq[i] == a) ai = i;
+        if (seq[i] == b) bi = i;
+    }
+    return (ai >= 0 && bi >= 0 && bi == (ai + 1) % 4);
+}
+
+bool isCCW(GDir a, GDir b) {
+    const GDir seq[] = {G_UP, G_LEFT, G_DOWN, G_RIGHT};
+    int ai = -1, bi = -1;
+    for (int i = 0; i < 4; i++) {
+        if (seq[i] == a) ai = i;
+        if (seq[i] == b) bi = i;
+    }
+    return (ai >= 0 && bi >= 0 && bi == (ai + 1) % 4);
+}
+
+GDir checkArc() {
+    if (arcLen < 3) return G_NONE;
+    bool cw = true, ccw = true;
+    for (int i = 1; i < arcLen; i++) {
+        if (!isCW(arcQueue[i - 1], arcQueue[i])) cw = false;
+        if (!isCCW(arcQueue[i - 1], arcQueue[i])) ccw = false;
+    }
+    if (cw) return G_CW;
+    if (ccw) return G_CCW;
+    return G_NONE;
+}
+
+// ==================== BLE 复合 HID ====================
+NimBLEHIDDevice* hid;
+NimBLECharacteristic* inpKb;
+NimBLECharacteristic* inpMouse;
+NimBLECharacteristic* inpMedia;
+NimBLEServer* bleServer;
+
+#define RID_KEYBOARD 0x01
+#define RID_MOUSE    0x02
+#define RID_MEDIA    0x03
+
+const uint8_t kbDesc[] = {
+    0x05, 0x01, 0x09, 0x06, 0xA1, 0x01,
+    0x85, RID_KEYBOARD,
+    0x05, 0x07, 0x19, 0xE0, 0x29, 0xE7, 0x15, 0x00, 0x25, 0x01, 0x75, 0x01, 0x95, 0x08, 0x81, 0x02,
+    0x95, 0x01, 0x75, 0x08, 0x81, 0x03,
+    0x95, 0x06, 0x75, 0x08, 0x15, 0x00, 0x25, 0x65, 0x05, 0x07, 0x19, 0x00, 0x29, 0x65, 0x81, 0x00,
+    0xC0
 };
-volatile Mode g_mode = MODE_PC_KEY;
 
-/* ===================== 圆弧状态机 ===================== */
-enum Dir : uint8_t {
-  DIR_NONE  = 0,
-  DIR_UP    = 1,
-  DIR_DOWN  = 2,
-  DIR_LEFT  = 3,
-  DIR_RIGHT = 4
+const uint8_t mouseDesc[] = {
+    0x05, 0x01, 0x09, 0x02, 0xA1, 0x01,
+    0x85, RID_MOUSE,
+    0x09, 0x01, 0xA1, 0x00,
+    0x95, 0x05, 0x75, 0x01, 0x05, 0x09, 0x19, 0x01, 0x29, 0x05, 0x81, 0x02,
+    0x95, 0x01, 0x75, 0x03, 0x81, 0x03,
+    0x95, 0x01, 0x75, 0x08, 0x05, 0x01, 0x09, 0x30, 0x09, 0x31, 0x09, 0x38,
+    0x15, 0x81, 0x25, 0x7F, 0x81, 0x06,
+    0xC0, 0xC0
 };
 
-enum ArcState : uint8_t {
-  ARC_IDLE    = 0,
-  ARC_PENDING = 1,
-  ARC_ARC     = 2
+const uint8_t mediaDesc[] = {
+    0x05, 0x0C, 0x09, 0x01, 0xA1, 0x01,
+    0x85, RID_MEDIA,
+    0x15, 0x00, 0x25, 0x01, 0x75, 0x01, 0x95, 0x08,
+    0x09, 0xE9, 0x09, 0xEA, 0x09, 0xB5, 0x09, 0xB6, 0x09, 0xCD, 0x09, 0xB0, 0x09, 0xB1, 0x09, 0xB2,
+    0x81, 0x02,
+    0xC0
 };
 
-static ArcState arcState = ARC_IDLE;
-static Dir arcPendingDir = DIR_NONE;
-static Dir arcLastDir = DIR_NONE;
-static uint8_t arcCwCnt = 0;
-static uint8_t arcCcwCnt = 0;
-static uint32_t arcTimeMs = 0;
-
-#define SOLO_TIMEOUT_MS 160
-#define ARC_TIMEOUT_MS 900
-
-// 判断从前一方向转到当前方向是否构成顺时针的一步。
-static bool isCwStep(Dir prev, Dir cur) {
-  return (prev == DIR_RIGHT && cur == DIR_DOWN) ||
-         (prev == DIR_DOWN  && cur == DIR_LEFT) ||
-         (prev == DIR_LEFT  && cur == DIR_UP)   ||
-         (prev == DIR_UP    && cur == DIR_RIGHT);
-}
-// 判断从前一方向转到当前方向是否构成逆时针的一步。
-static bool isCcwStep(Dir prev, Dir cur) {
-  return (prev == DIR_RIGHT && cur == DIR_UP)   ||
-         (prev == DIR_UP    && cur == DIR_LEFT) ||
-         (prev == DIR_LEFT  && cur == DIR_DOWN) ||
-         (prev == DIR_DOWN  && cur == DIR_RIGHT);
-}
-// 清空圆弧识别状态和计数器，供识别完成、超时或模式切换时调用。
-static void arcReset() {
-  arcState = ARC_IDLE;
-  arcPendingDir = DIR_NONE;
-  arcLastDir = DIR_NONE;
-  arcCwCnt = 0;
-  arcCcwCnt = 0;
-}
-
-#define EVT_NONE 0x00
-#define EVT_SOLO(d) (0x40 | ((d) & 0x0F))
-#define EVT_CW 0x81
-#define EVT_CCW 0x82
-
-// 将一个方向输入送入圆弧状态机；识别完成时返回单方向、顺时针或逆时针事件。
-static uint8_t arcFeed(Dir d) {
-  uint32_t now = millis();
-
-  if (arcState == ARC_PENDING && now - arcTimeMs > SOLO_TIMEOUT_MS) {
-    Dir solo = arcPendingDir;
-    arcReset();
-    return EVT_SOLO(solo);
-  }
-  if (arcState == ARC_ARC && now - arcTimeMs > ARC_TIMEOUT_MS) {
-    arcReset();
-    return 0;
-  }
-
-  if (arcState == ARC_IDLE) {
-    arcState = ARC_PENDING;
-    arcPendingDir = d;
-    arcTimeMs = now;
-    return 0;
-  }
-
-  if (arcState == ARC_PENDING) {
-    if (d == arcPendingDir) {
-      Dir solo = arcPendingDir;
-      arcReset();
-      return EVT_SOLO(solo);
+class GestureServerCallbacks : public NimBLEServerCallbacks {
+    void onConnect(NimBLEServer* server, NimBLEConnInfo& connInfo) override {
+        (void)connInfo;
+        Serial.printf("[BLE] Connected; active connections: %u\n", server->getConnectedCount());
     }
-    if (isCwStep(arcPendingDir, d) || isCcwStep(arcPendingDir, d)) {
-      arcState = ARC_ARC;
-      arcLastDir = d;
-      arcTimeMs = now;
-      if (isCwStep(arcPendingDir, d)) arcCwCnt = 1;
-      else arcCcwCnt = 1;
-      return 0;
+
+    void onDisconnect(NimBLEServer* server, NimBLEConnInfo& connInfo, int reason) override {
+        (void)server;
+        (void)connInfo;
+        Serial.printf("[BLE] Disconnected; reason=%d; advertising will restart\n", reason);
     }
-    arcPendingDir = d;
-    arcTimeMs = now;
-    return 0;
-  }
 
-  if (d == arcLastDir) return 0;
-
-  if (isCwStep(arcLastDir, d)) {
-    arcCcwCnt = 0;
-    arcCwCnt++;
-  } else if (isCcwStep(arcLastDir, d)) {
-    arcCwCnt = 0;
-    arcCcwCnt++;
-  } else {
-    arcState = ARC_PENDING;
-    arcPendingDir = d;
-    arcLastDir = DIR_NONE;
-    arcCwCnt = 0;
-    arcCcwCnt = 0;
-    arcTimeMs = now;
-    return 0;
-  }
-
-  arcLastDir = d;
-  arcTimeMs = now;
-
-  if (arcCwCnt >= ARC_STEPS_TO_CONFIRM) { arcReset(); return EVT_CW; }
-  if (arcCcwCnt >= ARC_STEPS_TO_CONFIRM) { arcReset(); return EVT_CCW; }
-  return EVT_NONE;
-}
-
-// 在没有新手势输入时处理等待超时：提交孤立方向，或清理超时圆弧。
-static uint8_t arcPoll() {
-  if (arcState != ARC_PENDING) {
-    if (arcState == ARC_ARC && millis() - arcTimeMs > ARC_TIMEOUT_MS) arcReset();
-    return EVT_NONE;
-  }
-  if (millis() - arcTimeMs <= SOLO_TIMEOUT_MS) return EVT_NONE;
-  Dir solo = arcPendingDir;
-  arcReset();
-  return EVT_SOLO(solo);
-}
-
-/* ===================== OLED ===================== */
-// 在 OLED 上显示当前控制模式及对应 BLE 设备的连接状态。
-static void oledShowMode() {
-  const char* name = "";
-  switch (g_mode) {
-    case MODE_PC_KEY:   name = "PC KEY (PPT)";   break;
-    case MODE_PC_MOUSE: name = "PC MOUSE";       break;
-    case MODE_ANDROID:  name = "ANDROID MEDIA";  break;
-  }
-  bool connected = (g_mode == MODE_PC_MOUSE) ? mo.isConnected() : kb.isConnected();
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);  display.println(F("Gesture-BLE Ctrl"));
-  display.setCursor(0, 18); display.print(F("Mode ")); display.print((int)g_mode);
-  display.print(F(": ")); display.println(name);
-  display.setCursor(0, 44);
-  display.print(connected ? F("BLE connected") : F("BLE waiting..."));
-  display.display();
-}
-
-// 在 OLED 上显示最近执行的动作或错误提示。
-static void oledShowAction(const char* act) {
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(0, 0); display.println(F("Gesture-BLE Ctrl"));
-  display.setTextSize(2);
-  display.setCursor(0, 24); display.println(act);
-  display.display();
-}
-
-/* ===================== 蜂鸣器（非阻塞） ===================== */
-static uint32_t beepEndMs = 0;
-// 启动指定频率和时长的提示音，并记录预计结束时间。
-static void beepStart(uint16_t freq = 2300, uint16_t dur = 55) {
-  tone(BUZZER_PIN, freq, dur);
-  beepEndMs = millis() + dur;
-}
-// 检查提示音是否到期；到期后关闭蜂鸣器，不阻塞主循环。
-static void beepUpdate() {
-  if (beepEndMs && millis() >= beepEndMs) {
-    beepEndMs = 0;
-  }
-}
-
-/* ===================== BLE 管理 ===================== */
-// 按当前模式启动所需的键盘或鼠标 HID；每种设备只启动一次。
-static void ensureHID() {
-  static bool keyboardStarted = false;
-  static bool mouseStarted = false;
-  if (g_mode == MODE_PC_MOUSE && !mouseStarted) {
-    mo.begin();
-    mouseStarted = true;
-  } else if (g_mode != MODE_PC_MOUSE && !keyboardStarted) {
-    kb.begin();
-    keyboardStarted = true;
-  }
-}
-
-// 循环切换控制模式，并重置手势识别、启动 HID、更新 OLED 和提示音。
-static void switchMode() {
-  g_mode = (Mode)((uint8_t)g_mode + 1);
-  if (g_mode > MODE_ANDROID) g_mode = MODE_PC_KEY;
-  arcReset();
-  ensureHID();
-  beepStart(2200, 75);
-  oledShowMode();
-  Serial.printf("[MODE] switched -> %d\n", (int)g_mode);
-}
-
-/* ===================== BOOT 中断 ===================== */
-static volatile bool bootPressed = false;
-static uint32_t lastBootMs = 0;
-// BOOT 键下降沿中断：通过简单消抖后通知主循环执行模式切换。
-static void IRAM_ATTR bootISR() {
-  uint32_t now = millis();
-  if (now - lastBootMs > 280) {
-    bootPressed = true;
-    lastBootMs = now;
-  }
-}
-
-/* ===================== 动作执行 ===================== */
-// 查询当前模式对应的 BLE HID 设备是否已连接。
-static bool isBleReady() {
-  return (g_mode == MODE_PC_MOUSE) ? mo.isConnected() : kb.isConnected();
-}
-
-// 按当前模式将单方向手势映射为键盘按键、鼠标移动或媒体控制。
-static void execDirection(Dir d) {
-  static uint32_t lastActMs = 0;
-  uint32_t now = millis();
-  Serial.printf("[APDS] gesture detected on %02X\n", APDS_ADDR);
-  if (now - lastActMs < GESTURE_COOLDOWN_MS) return;
-  lastActMs = now;
-
-  if (!isBleReady()) { oledShowAction("NO BLE"); beepStart(1000, 90); return; }
-
-  const char* name = "";
-  switch (d) {
-    case DIR_UP:    name = "UP";    break;
-    case DIR_DOWN:  name = "DOWN";  break;
-    case DIR_LEFT:  name = "LEFT";  break;
-    case DIR_RIGHT: name = "RIGHT"; break;
-    default: return;
-  }
-
-  switch (g_mode) {
-    case MODE_PC_KEY:
-      if (d == DIR_UP)        kb.write(KEY_PAGE_UP);
-      else if (d == DIR_DOWN) kb.write(KEY_PAGE_DOWN);
-      else if (d == DIR_LEFT) kb.write(KEY_LEFT_ARROW);
-      else if (d == DIR_RIGHT) { kb.write(KEY_RETURN); name = "ENTER"; }
-      break;
-    case MODE_PC_MOUSE:
-      if (d == DIR_UP)        mo.move(0, -20);
-      else if (d == DIR_DOWN) mo.move(0, 20);
-      else if (d == DIR_LEFT) mo.move(-20, 0);
-      else if (d == DIR_RIGHT) { mo.click(MOUSE_LEFT); name = "CLICK"; }
-      break;
-    case MODE_ANDROID:
-      if (d == DIR_UP)        kb.write(KEY_MEDIA_VOLUME_UP);
-      else if (d == DIR_DOWN) kb.write(KEY_MEDIA_VOLUME_DOWN);
-      else if (d == DIR_LEFT) kb.write(KEY_MEDIA_PREVIOUS_TRACK);
-      else if (d == DIR_RIGHT) kb.write(KEY_MEDIA_NEXT_TRACK);
-      break;
-  }
-  oledShowAction(name);
-  beepStart(2400, 42);
-}
-
-// 按当前模式执行顺时针或逆时针圆弧对应的翻页、滚轮或音量动作。
-static void execCircle(bool cw) {
-  static uint32_t lastActMs = 0;
-  uint32_t now = millis();
-  if (now - lastActMs < GESTURE_COOLDOWN_MS) return;
-  lastActMs = now;
-
-  if (!isBleReady()) { oledShowAction("NO BLE"); beepStart(1000, 90); return; }
-
-  Serial.printf("[GESTURE] %s\n", cw ? "CW" : "CCW");
-
-  switch (g_mode) {
-    case MODE_PC_KEY:
-      if (cw) { kb.write(KEY_PAGE_DOWN); oledShowAction("Next >>"); }
-      else    { kb.write(KEY_PAGE_UP);   oledShowAction("<< Prev"); }
-      break;
-    case MODE_PC_MOUSE:
-      if (cw) { mo.move(0, 0, 1);  oledShowAction("Wheel Up"); }
-      else    { mo.move(0, 0, -1); oledShowAction("Wheel Down"); }
-      break;
-    case MODE_ANDROID:
-      if (cw) { kb.write(KEY_MEDIA_VOLUME_UP);   oledShowAction("Vol +"); }
-      else    { kb.write(KEY_MEDIA_VOLUME_DOWN); oledShowAction("Vol -"); }
-      break;
-  }
-  beepStart(cw ? 2700 : 1900, 47);
-}
-
-/* ===================== APDS 初始化 ===================== */
-// 通过原始 I2C 访问兼容 APDS9960 寄存器的传感器，不依赖库的芯片 ID 检查。
-static bool apdsWrite(uint8_t reg, uint8_t value) {
-  Wire.beginTransmission(APDS_ADDR);
-  Wire.write(reg);
-  Wire.write(value);
-  uint8_t error = Wire.endTransmission();
-  if (error != 0) {
-    Serial.printf("[APDS][I2C] write reg=0x%02X value=0x%02X failed, error=%u\n",
-                  reg, value, error);
-    return false;
-  }
-  return true;
-}
-
-static bool apdsRead(uint8_t reg, uint8_t& value) {
-  static uint32_t lastErrorMs = 0;
-  Wire.beginTransmission(APDS_ADDR);
-  Wire.write(reg);
-  uint8_t error = Wire.endTransmission(false);
-  if (error != 0) {
-    if (millis() - lastErrorMs >= 1000) {
-      lastErrorMs = millis();
-      Serial.printf("[APDS][I2C] read reg=0x%02X address phase failed, error=%u\n",
-                    reg, error);
+    void onAuthenticationComplete(NimBLEConnInfo& connInfo) override {
+        Serial.printf("[BLE] Authentication complete; encrypted=%s\n",
+                      connInfo.isEncrypted() ? "yes" : "no");
     }
-    return false;
-  }
-  uint8_t received = Wire.requestFrom((uint8_t)APDS_ADDR, (uint8_t)1);
-  if (received != 1) {
-    if (millis() - lastErrorMs >= 1000) {
-      lastErrorMs = millis();
-      Serial.printf("[APDS][I2C] read reg=0x%02X expected 1 byte, received %u\n",
-                    reg, received);
+};
+
+static GestureServerCallbacks bleCallbacks;
+
+bool sendHidReport(NimBLECharacteristic* characteristic, const char* reportName) {
+    if (!bleServer || bleServer->getConnectedCount() == 0) {
+        Serial.printf("[BLE] No connected host; skipped %s report\n", reportName);
+        return false;
     }
-    return false;
-  }
-  value = Wire.read();
-  return true;
+    if (!characteristic || !characteristic->notify()) {
+        Serial.printf("[BLE] %s report notification failed; check pairing and report subscription\n", reportName);
+        return false;
+    }
+    Serial.printf("[BLE] %s report notification accepted\n", reportName);
+    return true;
 }
 
-// 从手势 FIFO 取 U/D/L/R 四路数据，稳定确认方向后只上报一次。
-static Dir readGestureDirection() {
-  static Dir emitted = DIR_NONE;
-  static uint8_t idleCount = 0;
-  static uint32_t lastDebugMs = 0;
+void sendKb(uint8_t mod, uint8_t key) {
+    uint8_t report[7] = {mod, 0, key, 0, 0, 0, 0};
+    inpKb->setValue(report, sizeof(report));
+    sendHidReport(inpKb, "keyboard");
+}
+void releaseKb() { sendKb(0, 0); }
 
-  uint8_t status;
-  bool statusRead = apdsRead(0xAF, status);
-  if (!statusRead || !(status & 0x01)) {
-    if (millis() - lastDebugMs >= 1000) {
-      lastDebugMs = millis();
-      if (statusRead) {
-        Serial.printf("[APDS] no gesture data: GSTATUS=0x%02X GVALID=%u GFOV=%u\n",
-                      status, status & 0x01, (status >> 2) & 0x01);
-      }
-      else Serial.println(F("[APDS] failed to read GSTATUS"));
-    }
-    if (++idleCount >= 3) {
-      emitted = DIR_NONE;
-    }
-    return DIR_NONE;
-  }
-  idleCount = 0;
-
-  Wire.beginTransmission(APDS_ADDR);
-  Wire.write(0xFC);
-  uint8_t txError = Wire.endTransmission(false);
-  if (txError != 0) {
-    Serial.printf("[APDS][I2C] FIFO address phase failed, error=%u\n", txError);
-    return DIR_NONE;
-  }
-  uint8_t received = Wire.requestFrom((uint8_t)APDS_ADDR, (uint8_t)4);
-  if (received != 4) {
-    Serial.printf("[APDS][I2C] FIFO expected 4 bytes, received %u\n", received);
-    return DIR_NONE;
-  }
-
-  uint8_t data[4];
-  for (uint8_t i = 0; i < 4; ++i) data[i] = Wire.read();
-
-  int udDiff = (int)data[0] - (int)data[1];
-  int lrDiff = (int)data[2] - (int)data[3];
-  Dir direction = DIR_NONE;
-  if (abs(udDiff) > 20 && abs(udDiff) > abs(lrDiff)) {
-    direction = udDiff > 0 ? DIR_UP : DIR_DOWN;
-  } else if (abs(lrDiff) > 20 && abs(lrDiff) > abs(udDiff)) {
-    direction = lrDiff > 0 ? DIR_LEFT : DIR_RIGHT;
-  }
-
-  if (millis() - lastDebugMs >= 100) {
-    lastDebugMs = millis();
-    Serial.printf("[APDS] FIFO U:%u D:%u L:%u R:%u UD:%d LR:%d DIR:%u\n",
-                  data[0], data[1], data[2], data[3], udDiff, lrDiff, direction);
-  }
-
-  if (direction == DIR_NONE) {
-    if (++idleCount >= 3) {
-      emitted = DIR_NONE;
-    }
-    return DIR_NONE;
-  }
-
-  if (emitted == direction) {
-    static uint32_t lastRepeatMs = 0;
-    if (millis() - lastRepeatMs >= 500) {
-      lastRepeatMs = millis();
-      Serial.printf("[APDS] direction %u suppressed: same as previous event\n", direction);
-    }
-    return DIR_NONE;
-  }
-
-  emitted = direction;
-  Serial.printf("[GESTURE] U:%u D:%u L:%u R:%u UD:%d LR:%d DIR:%u\n",
-                data[0], data[1], data[2], data[3], udDiff, lrDiff, direction);
-  return direction;
+void sendMouse(uint8_t btn, int8_t dx, int8_t dy, int8_t dw) {
+    uint8_t report[4] = {btn, (uint8_t)dx, (uint8_t)dy, (uint8_t)dw};
+    inpMouse->setValue(report, sizeof(report));
+    sendHidReport(inpMouse, "mouse");
 }
 
-// 初始化寄存器并逐步启用接近/手势检测；失败时报告具体寄存器。
-static bool initAPDS() {
-  uint8_t chipId;
-  if (!apdsRead(0x92, chipId)) {
-    Serial.printf("[APDS] no I2C response at 0x%02X\n", APDS_ADDR);
-    return false;
-  }
-
-  Serial.printf("[APDS] response at 0x%02X, chip ID=0x%02X\n", APDS_ADDR, chipId);
-  if (!apdsWrite(0x80, 0x00)) return false;
-  delay(100);
-
-  const uint8_t config[][2] = {
-    {0x8F, 0x00}, {0x81, 0xF6}, {0x83, 0xFF}, {0x8D, 0x60},
-    {0xA0, GESTURE_PROX_THRESH},
-    {0xA1, (uint8_t)(GESTURE_PROX_THRESH * 3 / 4)},
-    {0xA2, 0x40}, {0xA3, (uint8_t)((GESTURE_GAIN & 0x03) << 4)},
-    {0xA6, 0x81}, {0xAA, 0x00}, {0xAB, 0x00}
-  };
-  for (const auto& setting : config) {
-    if (!apdsWrite(setting[0], setting[1])) {
-      Serial.printf("[APDS] initialization stopped at register 0x%02X value=0x%02X\n",
-                    setting[0], setting[1]);
-      return false;
-    }
-  }
-
-  if (!apdsWrite(0x80, 0x01)) return false;
-  delay(300);
-  if (!apdsWrite(0x80, 0x05)) return false;
-  delay(300);
-  if (!apdsWrite(0x80, 0x45)) return false;
-  delay(300);
-  if (!apdsWrite(0xAB, 0x01)) return false;
-
-  Serial.println(F("[APDS] raw-register init OK"));
-  return true;
+void sendMediaBit(uint8_t bit) {
+    uint8_t report = (uint8_t)(1 << bit);
+    inpMedia->setValue(&report, sizeof(report));
+    sendHidReport(inpMedia, "media");
+    delay(20);
+    report = 0;
+    inpMedia->setValue(&report, sizeof(report));
+    sendHidReport(inpMedia, "media release");
 }
 
-/* ===================== SETUP / LOOP ===================== */
-// Arduino 启动入口：初始化串口、I2C、OLED、传感器、按键中断及 BLE HID。
+bool initBLE() {
+    if (!NimBLEDevice::init("Gesture3Mode")) {
+        Serial.println("[BLE] NimBLE initialization failed");
+        return false;
+    }
+    NimBLEDevice::setSecurityAuth(true, false, true);
+
+    bleServer = NimBLEDevice::createServer();
+    if (!bleServer) {
+        Serial.println("[BLE] GATT server creation failed");
+        return false;
+    }
+    bleServer->setCallbacks(&bleCallbacks, false);
+
+    hid = new NimBLEHIDDevice(bleServer);
+    if (!hid->setManufacturer("Espressif")) {
+        Serial.println("[BLE] Manufacturer setup failed");
+        return false;
+    }
+    hid->setHidInfo(0x00, 0x01);
+
+    uint8_t reportMap[sizeof(kbDesc) + sizeof(mouseDesc) + sizeof(mediaDesc)];
+    size_t offset = 0;
+    memcpy(reportMap + offset, kbDesc, sizeof(kbDesc));
+    offset += sizeof(kbDesc);
+    memcpy(reportMap + offset, mouseDesc, sizeof(mouseDesc));
+    offset += sizeof(mouseDesc);
+    memcpy(reportMap + offset, mediaDesc, sizeof(mediaDesc));
+    hid->setReportMap(reportMap, sizeof(reportMap));
+
+    inpKb = hid->getInputReport(RID_KEYBOARD);
+    inpMouse = hid->getInputReport(RID_MOUSE);
+    inpMedia = hid->getInputReport(RID_MEDIA);
+    if (!inpKb || !inpMouse || !inpMedia) {
+        Serial.println("[BLE] HID report characteristic creation failed");
+        return false;
+    }
+
+    if (!bleServer->start()) {
+        Serial.println("[BLE] GATT service start failed");
+        return false;
+    }
+
+    bleServer->advertiseOnDisconnect(true);
+    NimBLEAdvertising* adv = bleServer->getAdvertising();
+    adv->enableScanResponse(true);
+    if (!adv->setName("Gesture3Mode") ||
+        !adv->addServiceUUID(hid->getHidService()->getUUID()) ||
+        !adv->setAppearance(GENERIC_HID) ||
+        !adv->start()) {
+        Serial.println("[BLE] Advertising configuration or start failed");
+        return false;
+    }
+
+    Serial.println("[BLE] HID service started and advertising as Gesture3Mode");
+    return true;
+}
+
+// ==================== 手势执行 ====================
+void executeGesture(GDir g) {
+    if (g == G_NONE) return;
+    const char* tag = "";
+    switch (currentMode) {
+        case MODE_KB:
+            switch (g) {
+                case G_UP:    sendKb(0, 0x4B); releaseKb(); tag = "PageUp"; break;
+                case G_DOWN:  sendKb(0, 0x4E); releaseKb(); tag = "PageDown"; break;
+                case G_LEFT:  sendKb(0, 0x50); releaseKb(); tag = "Left"; break;
+                case G_RIGHT: sendKb(0, 0x28); releaseKb(); tag = "Enter"; break;
+                default: return;
+            }
+            break;
+
+        case MODE_MOUSE:
+            if (g == G_CW) {
+                sendMouse(0, 0, 0, 1); tag = "WheelUp";
+            } else if (g == G_CCW) {
+                sendMouse(0, 0, 0, -1); tag = "WheelDown";
+            } else {
+                switch (g) {
+                    case G_UP:    sendMouse(0, 0, -20, 0); tag = "MoveUp"; break;
+                    case G_DOWN:  sendMouse(0, 0, 20, 0);  tag = "MoveDown"; break;
+                    case G_LEFT:  sendMouse(0, -20, 0, 0); tag = "MoveLeft"; break;
+                    case G_RIGHT: sendMouse(0, 20, 0, 0);  tag = "MoveRight"; break;
+                    default: return;
+                }
+            }
+            break;
+
+        case MODE_MEDIA:
+            switch (g) {
+                case G_UP:    sendMediaBit(0); tag = "Vol+"; break;
+                case G_DOWN:  sendMediaBit(1); tag = "Vol-"; break;
+                case G_LEFT:  sendMediaBit(3); tag = "Prev"; break;
+                case G_RIGHT: sendMediaBit(2); tag = "Next"; break;
+                default: return;
+            }
+            break;
+    }
+    Serial.printf("[%s] %s\n", modeNames[currentMode], tag);
+}
+
+// 接近度处理
+void handleProximity(uint16_t prox) {
+    static uint16_t lastProx = 0;
+    static unsigned long lastProxTime = 0;
+    const uint16_t THRESHOLD = 150; // 可根据实际调节
+    const unsigned long PROX_COOLDOWN = 450;
+
+    if (prox > THRESHOLD && lastProx <= THRESHOLD && (millis() - lastProxTime > PROX_COOLDOWN)) {
+        lastProxTime = millis();
+        switch (currentMode) {
+            case MODE_MOUSE:
+                sendMouse(1, 0, 0, 0);
+                delay(30);
+                sendMouse(0, 0, 0, 0);
+                Serial.println("[Mouse] Left click (proximity)");
+                break;
+            case MODE_MEDIA:
+                sendMediaBit(4); // Play/Pause
+                Serial.println("[Media] Play/Pause (proximity)");
+                break;
+            default:
+                break;
+        }
+    }
+    lastProx = prox;
+}
+
+// ==================== OLED ====================
+void oledShow(const char* gestureStr) {
+    if (!oledOK) return;
+    display.clearDisplay();
+    display.setTextColor(SSD1306_WHITE);
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.println("Gesture 3Mode");
+    display.setCursor(0, 18);
+    display.print("Mode: ");
+    display.println(modeNames[currentMode]);
+    display.setCursor(0, 36);
+    display.print("Gesture: ");
+    display.println(gestureStr ? gestureStr : "-");
+    display.setCursor(0, 54);
+    display.println("BOOT=switch");
+    display.display();
+}
+
+// ==================== 设置 ====================
 void setup() {
-  Serial.begin(115200);
-  delay(200);
-  Serial.println(F("\nGesture-BLE Controller booting..."));
+    Serial.begin(115200);
+    delay(200);
 
-  Wire.begin(OLED_SDA, OLED_SCL);
-  Wire.setClock(100000);
+    // 蜂鸣器PWM
+    ledcSetup(BUZZER_CHANNEL, BUZZER_FREQ, BUZZER_RES);
+    ledcAttachPin(BUZZER_PIN, BUZZER_CHANNEL);
+    ledcWrite(BUZZER_CHANNEL, 0);
 
-  if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
-    Serial.println(F("[OLED] begin() failed! Halting."));
-    while (1) delay(1000);  // 无显示则死机，便于排查
-  }
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0); display.println(F("Init..."));
-  display.display();
+    pinMode(BOOT_PIN, INPUT_PULLUP);
 
-  pinMode(BUZZER_PIN, OUTPUT);
-  digitalWrite(BUZZER_PIN, LOW);
+    Wire.begin(OLED_SDA, OLED_SCL);
+    Wire.setClock(100000);
 
-  if (!initAPDS()) {
-    oledShowAction("APDS FAIL");
-    while (1) delay(1000);
-  }
+    if (display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
+        oledOK = true;
+        display.clearDisplay();
+        display.setCursor(0, 24);
+        display.println("Initializing...");
+        display.display();
+    } else {
+        Serial.println("OLED init failed!");
+    }
 
-  pinMode(BOOT_PIN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(BOOT_PIN), bootISR, FALLING);
+    // ① 读取并打印芯片 ID；同时确认 I2C 地址 0x39 确实有应答。
+    uint8_t sensorId = 0;
+    if (!readReg(0x92, sensorId)) {
+        Serial.println("[Sensor] No I2C response at 0x39 or failed to read chip ID");
+        while (1) delay(1000);
+    }
+    Serial.printf("[Sensor] I2C device at 0x39 responded; chip ID=0x%02X (Adafruit standard: 0xAB)\n",
+                  sensorId);
+    if (sensorId == 0x00 || sensorId == 0xFF) {
+        Serial.println("[Sensor] Invalid chip ID; stopping to avoid writing to an unrelated I2C device");
+        while (1) delay(1000);
+    }
 
-  ensureHID();
-  oledShowMode();
-  beepStart(1800, 65);
-  Serial.println(F("[BLE] advertising..."));
+    // 标准芯片使用 Adafruit 初始化；不同 ID 的兼容芯片只通过数据手册寄存器接口初始化。
+    if (sensorId == 0xAB) {
+        if (!apds.begin(10, APDS9960_AGAIN_4X, APDS_ADDR, &Wire)) {
+            Serial.println("[Sensor] Standard APDS9960 initialization failed");
+            while (1) delay(1000);
+        }
+        Serial.println("[Sensor] Standard APDS9960 initialization succeeded");
+        if (!configureGestureRegisters()) {
+            Serial.println("[Sensor] Register configuration verification failed; stopping");
+            while (1) delay(1000);
+        }
+        apds.enableProximity(true);
+        apds.enableGesture(true);
+    } else {
+        Serial.println("[Sensor] Nonstandard ID; trying compatible init. Confirm APDS9960 register compatibility");
+        if (!initializeCompatibleApds()) {
+            Serial.println("[Sensor] Compatible initialization failed; stopping");
+            while (1) delay(1000);
+        }
+    }
+
+    uint8_t enableReg = 0;
+    if (!readReg(0x80, enableReg) || enableReg != 0x45) {
+        Serial.printf("[Sensor] Enable verification failed: ENABLE expected 0x45, got 0x%02X\n", enableReg);
+        while (1) delay(1000);
+    }
+    Serial.println("[Sensor] Proximity and gesture enabled; ENABLE=0x45");
+
+    if (!initBLE()) {
+        while (1) delay(1000);
+    }
+
+    oledShow(NULL);
+    beepNonBlock(90);
+    Serial.println("System ready");
 }
 
-// Arduino 主循环：处理提示音、按键、手势状态机及 OLED 状态刷新。
+// ==================== 主循环 ====================
 void loop() {
-  beepUpdate();  // 非阻塞蜂鸣器
-
-  if (bootPressed) {
-    bootPressed = false;
-    switchMode();
-  }
-
-  uint8_t timeoutEvent = arcPoll();
-  //Serial.printf("[APDS] gesture detected on 1");
-  if ((timeoutEvent & 0xC0) == 0x40) {
-    Serial.printf("[APDS] gesture detected on 2");
-    execDirection((Dir)(timeoutEvent & 0x0F));
-  }
-
-  Dir d = readGestureDirection();
-  if (d != DIR_NONE) {
-    Serial.printf("[TRACE] Dir d=%u\n", (unsigned)d);
-  }
-
-  if (d != DIR_NONE) {
-    Serial.printf("[APDS] gesture detected on 4");
-    uint8_t evt = arcFeed(d);
-    if (evt == EVT_CW) {
-      Serial.printf("[APDS] gesture detected on 5");
-      execCircle(true);
-    } else if (evt == EVT_CCW) {
-      Serial.printf("[APDS] gesture detected on 6");
-      execCircle(false);
-    } else if ((evt & 0xC0) == 0x40) {
-      Serial.printf("[APDS] gesture detected on 7");  
-      execDirection((Dir)(evt & 0x0F));
+    // 蜂鸣器自动停止
+    if (beepEndMs && millis() >= beepEndMs) {
+        ledcWrite(BUZZER_CHANNEL, 0);
+        beepEndMs = 0;
     }
-  }
 
-  // 每1.5秒刷新OLED状态
-  static uint32_t refreshMs = 0;
-  if (millis() - refreshMs > 1500) {
-    refreshMs = millis();
-    oledShowMode();
-  }
+    // ---- BOOT键切换 ----
+    static unsigned long lastBootMs = 0;
+    static bool bootWasLow = false;
+    bool bootNow = (digitalRead(BOOT_PIN) == LOW);
+    if (bootNow && !bootWasLow && (millis() - lastBootMs > 280)) {
+        lastBootMs = millis();
+        currentMode = (Mode)((currentMode + 1) % MODE_N);
+        arcReset();
+        oledShow("SWITCH");
+        beepNonBlock(60);
+        Serial.printf("Mode -> %s\n", modeNames[currentMode]);
+    }
+    bootWasLow = bootNow;
 
-  delay(5);
+    // ---- 接近度 ----
+    uint16_t proximity = readSensorProximity();
+    handleProximity(proximity);
+
+    // ---- 手势读取 ----
+    static unsigned long lastGestureMs = 0;
+    uint8_t raw = readSensorGesture();
+    GDir dir = G_NONE;
+    if (raw) {
+        const char* rawName = "未知";
+        switch (raw) {
+            case APDS9960_UP:    dir = G_UP;    rawName = "UP"; break;
+            case APDS9960_DOWN:  dir = G_DOWN;  rawName = "DOWN"; break;
+            case APDS9960_LEFT:  dir = G_LEFT;  rawName = "LEFT"; break;
+            case APDS9960_RIGHT: dir = G_RIGHT; rawName = "RIGHT"; break;
+        }
+        // ④ 只在传感器报告到手势时打印原始值，避免空闲时刷屏。
+        Serial.printf("[Gesture] Sensor raw value=0x%02X, direction=%s\n", raw, rawName);
+    }
+
+    arcPush(dir);
+    GDir finalGesture = checkArc();
+    if (finalGesture == G_NONE && dir != G_NONE) {
+        finalGesture = dir;
+    }
+
+    if (finalGesture != G_NONE && (millis() - lastGestureMs > 350)) {
+        lastGestureMs = millis();
+        executeGesture(finalGesture);
+        const char* txt = "?";
+        switch (finalGesture) {
+            case G_UP:    txt = "UP";    break;
+            case G_DOWN:  txt = "DOWN";  break;
+            case G_LEFT:  txt = "LEFT";  break;
+            case G_RIGHT: txt = "RIGHT"; break;
+            case G_CW:    txt = "CW";    break;
+            case G_CCW:   txt = "CCW";   break;
+            default: break;
+        }
+        oledShow(txt);
+    }
+
+    // 定期刷新OLED
+    static unsigned long lastOledRefresh = 0;
+    if (millis() - lastOledRefresh > 850) {
+        lastOledRefresh = millis();
+        oledShow(NULL);
+    }
+
+    // ⑤ 每 5 秒输出一次蓝牙连接和广播状态，便于区分识别问题与连接问题。
+    static unsigned long lastBleStatusMs = 0;
+    if (millis() - lastBleStatusMs > 5000) {
+        lastBleStatusMs = millis();
+        if (bleServer) {
+            NimBLEAdvertising* advertising = bleServer->getAdvertising();
+            Serial.printf("[BLE status] connections=%u, advertising=%s\n",
+                          bleServer->getConnectedCount(),
+                          advertising && advertising->isAdvertising() ? "进行中" : "未广播");
+        }
+    }
+
+    delay(15);
 }
