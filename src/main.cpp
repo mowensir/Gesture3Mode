@@ -32,8 +32,8 @@
 #define BUZZER_PIN           5
 #define BOOT_PIN             0
 
-#define GESTURE_PROX_THRESH  30
-#define GESTURE_GAIN         2       // 0=1x, 1=2x, 2=4x, 3=8x
+#define GESTURE_PROX_THRESH  0x40
+#define GESTURE_GAIN         0       // 0=1x, 1=2x, 2=4x, 3=8x
 #define GESTURE_COOLDOWN_MS  350
 #define ARC_STEPS_TO_CONFIRM 3
 
@@ -346,31 +346,60 @@ static bool apdsWrite(uint8_t reg, uint8_t value) {
   Wire.beginTransmission(APDS_ADDR);
   Wire.write(reg);
   Wire.write(value);
-  return Wire.endTransmission() == 0;
+  uint8_t error = Wire.endTransmission();
+  if (error != 0) {
+    Serial.printf("[APDS][I2C] write reg=0x%02X value=0x%02X failed, error=%u\n",
+                  reg, value, error);
+    return false;
+  }
+  return true;
 }
 
 static bool apdsRead(uint8_t reg, uint8_t& value) {
+  static uint32_t lastErrorMs = 0;
   Wire.beginTransmission(APDS_ADDR);
   Wire.write(reg);
-  if (Wire.endTransmission(false) != 0) return false;
-  if (Wire.requestFrom((uint8_t)APDS_ADDR, (uint8_t)1) != 1) return false;
+  uint8_t error = Wire.endTransmission(false);
+  if (error != 0) {
+    if (millis() - lastErrorMs >= 1000) {
+      lastErrorMs = millis();
+      Serial.printf("[APDS][I2C] read reg=0x%02X address phase failed, error=%u\n",
+                    reg, error);
+    }
+    return false;
+  }
+  uint8_t received = Wire.requestFrom((uint8_t)APDS_ADDR, (uint8_t)1);
+  if (received != 1) {
+    if (millis() - lastErrorMs >= 1000) {
+      lastErrorMs = millis();
+      Serial.printf("[APDS][I2C] read reg=0x%02X expected 1 byte, received %u\n",
+                    reg, received);
+    }
+    return false;
+  }
   value = Wire.read();
   return true;
 }
 
 // 从手势 FIFO 取 U/D/L/R 四路数据，稳定确认方向后只上报一次。
 static Dir readGestureDirection() {
-  static Dir candidate = DIR_NONE;
   static Dir emitted = DIR_NONE;
-  static uint8_t stableCount = 0;
   static uint8_t idleCount = 0;
+  static uint32_t lastDebugMs = 0;
 
   uint8_t status;
-  if (!apdsRead(0xAF, status) || !(status & 0x01)) {
+  bool statusRead = apdsRead(0xAF, status);
+  if (!statusRead || !(status & 0x01)) {
+    if (millis() - lastDebugMs >= 1000) {
+      lastDebugMs = millis();
+      if (statusRead) {
+        Serial.printf("[APDS] no gesture data: GSTATUS=0x%02X GVALID=%u GFOV=%u\n",
+                      status, status & 0x01, (status >> 2) & 0x01);
+      }
+      else Serial.println(F("[APDS] failed to read GSTATUS"));
+    }
     if (++idleCount >= 3) {
-      candidate = DIR_NONE;
       emitted = DIR_NONE;
-      stableCount = 0;
     }
     return DIR_NONE;
   }
@@ -378,9 +407,14 @@ static Dir readGestureDirection() {
 
   Wire.beginTransmission(APDS_ADDR);
   Wire.write(0xFC);
-  if (Wire.endTransmission(false) != 0 ||
-      Wire.requestFrom((uint8_t)APDS_ADDR, (uint8_t)4) != 4) {
-    stableCount = 0;
+  uint8_t txError = Wire.endTransmission(false);
+  if (txError != 0) {
+    Serial.printf("[APDS][I2C] FIFO address phase failed, error=%u\n", txError);
+    return DIR_NONE;
+  }
+  uint8_t received = Wire.requestFrom((uint8_t)APDS_ADDR, (uint8_t)4);
+  if (received != 4) {
+    Serial.printf("[APDS][I2C] FIFO expected 4 bytes, received %u\n", received);
     return DIR_NONE;
   }
 
@@ -390,28 +424,33 @@ static Dir readGestureDirection() {
   int udDiff = (int)data[0] - (int)data[1];
   int lrDiff = (int)data[2] - (int)data[3];
   Dir direction = DIR_NONE;
-  if (abs(udDiff) > 13 && abs(udDiff) > abs(lrDiff)) {
-    direction = udDiff > 0 ? DIR_DOWN : DIR_UP;
-  } else if (abs(lrDiff) > 13 && abs(lrDiff) > abs(udDiff)) {
-    direction = lrDiff > 0 ? DIR_RIGHT : DIR_LEFT;
+  if (abs(udDiff) > 20 && abs(udDiff) > abs(lrDiff)) {
+    direction = udDiff > 0 ? DIR_UP : DIR_DOWN;
+  } else if (abs(lrDiff) > 20 && abs(lrDiff) > abs(udDiff)) {
+    direction = lrDiff > 0 ? DIR_LEFT : DIR_RIGHT;
+  }
+
+  if (millis() - lastDebugMs >= 100) {
+    lastDebugMs = millis();
+    Serial.printf("[APDS] FIFO U:%u D:%u L:%u R:%u UD:%d LR:%d DIR:%u\n",
+                  data[0], data[1], data[2], data[3], udDiff, lrDiff, direction);
   }
 
   if (direction == DIR_NONE) {
     if (++idleCount >= 3) {
-      candidate = DIR_NONE;
       emitted = DIR_NONE;
-      stableCount = 0;
     }
     return DIR_NONE;
   }
 
-  if (direction != candidate) {
-    candidate = direction;
-    stableCount = 1;
+  if (emitted == direction) {
+    static uint32_t lastRepeatMs = 0;
+    if (millis() - lastRepeatMs >= 500) {
+      lastRepeatMs = millis();
+      Serial.printf("[APDS] direction %u suppressed: same as previous event\n", direction);
+    }
     return DIR_NONE;
   }
-  if (stableCount < 3) ++stableCount;
-  if (stableCount < 3 || emitted == direction) return DIR_NONE;
 
   emitted = direction;
   Serial.printf("[GESTURE] U:%u D:%u L:%u R:%u UD:%d LR:%d DIR:%u\n",
@@ -432,15 +471,16 @@ static bool initAPDS() {
   delay(100);
 
   const uint8_t config[][2] = {
-    {0x8F, 0x00}, {0x81, 0xF6}, {0x83, 0xFF}, {0x8D, 0x00},
+    {0x8F, 0x00}, {0x81, 0xF6}, {0x83, 0xFF}, {0x8D, 0x60},
     {0xA0, GESTURE_PROX_THRESH},
     {0xA1, (uint8_t)(GESTURE_PROX_THRESH * 3 / 4)},
-    {0xA2, 0x01}, {0xA3, (uint8_t)((GESTURE_GAIN & 0x03) << 4)},
-    {0xA6, 0xC9}, {0xAA, 0x00}, {0xAB, 0x00}
+    {0xA2, 0x40}, {0xA3, (uint8_t)((GESTURE_GAIN & 0x03) << 4)},
+    {0xA6, 0x81}, {0xAA, 0x00}, {0xAB, 0x00}
   };
   for (const auto& setting : config) {
     if (!apdsWrite(setting[0], setting[1])) {
-      Serial.printf("[APDS] write failed at register 0x%02X\n", setting[0]);
+      Serial.printf("[APDS] initialization stopped at register 0x%02X value=0x%02X\n",
+                    setting[0], setting[1]);
       return false;
     }
   }
