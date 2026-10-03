@@ -11,10 +11,10 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <Adafruit_APDS9960.h>
 #include <NimBLEDevice.h>
 #include <NimBLEHIDDevice.h>
 #include <NimBLECharacteristic.h>
+#include <atomic>
 #include <string.h>
 
 // ==================== 引脚定义 ====================
@@ -26,6 +26,13 @@
 #define BUZZER_PIN  5
 #define BOOT_PIN    0
 #define APDS_ADDR   0x39
+
+enum : uint8_t {
+    APDS_GESTURE_UP = 0x01,
+    APDS_GESTURE_DOWN = 0x02,
+    APDS_GESTURE_LEFT = 0x03,
+    APDS_GESTURE_RIGHT = 0x04
+};
 
 // ==================== 蜂鸣器PWM ====================
 #define BUZZER_CHANNEL 0
@@ -43,7 +50,28 @@ Adafruit_SSD1306 display(SCREEN_W, SCREEN_H, &Wire, -1);
 bool oledOK = false;
 
 // ==================== APDS9960 ====================
-Adafruit_APDS9960 apds;
+constexpr uint8_t APDS_REG_ENABLE = 0x80;
+constexpr uint8_t APDS_REG_ID = 0x92;
+constexpr uint8_t APDS_REG_PDATA = 0x9C;
+constexpr uint8_t APDS_REG_GCONF4 = 0xAB;
+constexpr uint8_t APDS_REG_GFLVL = 0xAE;
+constexpr uint8_t APDS_REG_GSTATUS = 0xAF;
+constexpr uint8_t APDS_REG_GFIFO_U = 0xFC;
+constexpr uint8_t APDS_ID_STANDARD = 0xAB;
+constexpr uint8_t APDS_ID_COMPATIBLE = 0x9C;
+constexpr uint8_t APDS_ENABLE_GESTURE = 0x4D;
+constexpr uint8_t APDS_GESTURE_SAMPLES_MAX = 32;
+
+struct GestureSample {
+    uint8_t up;
+    uint8_t down;
+    uint8_t left;
+    uint8_t right;
+};
+
+GestureSample gestureSamples[APDS_GESTURE_SAMPLES_MAX];
+uint8_t gestureSampleCount = 0;
+bool gestureCaptureOverflow = false;
 
 bool writeReg(uint8_t reg, uint8_t val) {
     Wire.beginTransmission(APDS_ADDR);
@@ -83,164 +111,163 @@ bool writeRegChecked(uint8_t reg, uint8_t val) {
     return true;
 }
 
-bool configureGestureRegisters() {
-    bool ok = true;
-    ok &= writeRegChecked(0x8F, 0x08); // CONTROL：4x proximity gain，100 mA LED drive
-    ok &= writeRegChecked(0x8E, 0x87); // PPULSE：16 us，8 个 proximity LED 脉冲
-    ok &= writeRegChecked(0xA0, 0x06); // GPENTH：低反射兼容芯片进入阈值 6
-    ok &= writeRegChecked(0xA1, 0x03); // GEXTH：退出阈值 3
-    ok &= writeRegChecked(0xA2, 0x40); // GCONF1：FIFO 达到 4 组数据后报告有效
-    ok &= writeRegChecked(0xA3, 0x20); // GCONF2：2x 手势增益
-    ok &= writeRegChecked(0xA6, 0x81); // GPULSE：2 个 16 us 脉冲（计数值 + 1），与厂家示例一致
-    ok &= writeRegChecked(0xAA, 0x00); // GCONF3：启用上下、左右两组光电二极管
-    ok &= writeRegChecked(0xAB, 0x00); // GCONF4：先退出手势模式，再由库启动
-    return ok;
-}
+bool initializeApds(uint8_t sensorId) {
+    if (sensorId != APDS_ID_STANDARD && sensorId != APDS_ID_COMPATIBLE) {
+        Serial.printf("[Sensor] Unsupported chip ID 0x%02X; expected 0xAB or 0x9C\n",
+                      sensorId);
+        return false;
+    }
 
-bool initializeCompatibleApds() {
-    // 兼容芯片 ID 不同，直接按 APDS9960 寄存器初始化，不依赖 begin() 的 ID 检查副作用。
-    if (!writeRegChecked(0x80, 0x00)) return false;
-    delay(10);
+    // Register defaults and gesture startup sequence follow the supplied SparkFun APDS-9960 library.
+    const uint8_t defaults[][2] = {
+        {0x80, 0x00}, {0x81, 219}, {0x83, 246}, {0x8E, 0x87},
+        {0x9D, 0x00}, {0x9E, 0x00}, {0x8D, 0x60}, {0x8F, 0x09},
+        {0x89, 0x00}, {0x8B, 50}, {0x84, 0xFF}, {0x85, 0xFF},
+        {0x86, 0x00}, {0x87, 0x00}, {0x8C, 0x11}, {0x90, 0x01},
+        {0x9F, 0x00}, {0xA0, 40}, {0xA1, 30}, {0xA2, 0x40},
+        {0xA3, 0x41}, {0xA4, 0x00}, {0xA5, 0x00}, {0xA7, 0x00},
+        {0xA9, 0x00}, {0xA6, 0xC9}, {0xAA, 0x00}, {0xAB, 0x00}
+    };
+    for (const auto& setting : defaults) {
+        if (!writeRegChecked(setting[0], setting[1])) return false;
+    }
 
-    bool ok = true;
-    ok &= writeRegChecked(0x81, 0xFC); // ATIME：约 11.12 ms 积分时间
-    ok &= writeRegChecked(0x83, 0xFF); // WTIME：最短等待时间
-    ok &= configureGestureRegisters();
-    if (!ok) return false;
+    // SparkFun enableGestureSensor(false): wait, proximity pulse/LED boost, then PON/WEN/PEN/GEN.
+    const uint8_t gestureStartup[][2] = {
+        {0x83, 0xFF}, {0x8E, 0x89}, {0x90, 0x31},
+        {0xAB, 0x01}, {0x80, 0x01}, {0x80, 0x09},
+        {0x80, 0x0D}, {0x80, APDS_ENABLE_GESTURE}
+    };
+    for (const auto& setting : gestureStartup) {
+        if (!writeRegChecked(setting[0], setting[1])) return false;
+    }
 
-    if (!writeRegChecked(0x80, 0x01)) return false; // 仅上电
-    delay(10);
-    if (!writeRegChecked(0x80, 0x05)) return false; // 上电 + 接近度
-    delay(10);
-    if (!writeRegChecked(0x80, 0x45)) return false; // 上电 + 接近度 + 手势引擎
-    if (!writeRegChecked(0xAB, 0x01)) return false; // 启动手势状态机
+    uint8_t enabled = 0;
+    uint8_t gestureMode = 0;
+    if (!readReg(APDS_REG_ENABLE, enabled) || enabled != APDS_ENABLE_GESTURE ||
+        !readReg(APDS_REG_GCONF4, gestureMode) || gestureMode != 0x01) {
+        Serial.printf("[Sensor] Startup verification failed: ENABLE=0x%02X GCONF4=0x%02X\n",
+                      enabled, gestureMode);
+        return false;
+    }
 
-    Serial.println("[Sensor] Compatible APDS9960-register initialization complete");
+    Serial.printf("[Sensor] Factory-compatible initialization complete (ID=0x%02X)\n",
+                  sensorId);
     return true;
 }
 
-uint8_t readSensorProximity() {
-    uint8_t proximity = 0;
-    if (!readReg(0x9C, proximity)) {
+bool readSensorProximity(uint8_t& proximity) {
+    if (!readReg(APDS_REG_PDATA, proximity)) {
         static unsigned long lastErrorMs = 0;
         if (millis() - lastErrorMs >= 1000) {
             lastErrorMs = millis();
             Serial.println("[Sensor] Failed to read proximity register 0x9C");
         }
-        return 0;
+        return false;
     }
-    return proximity;
+    return true;
+}
+
+uint8_t classifyGestureSamples() {
+    if (gestureSampleCount <= 4) return 0;
+
+    int first = -1;
+    int last = -1;
+    for (uint8_t i = 0; i < gestureSampleCount; ++i) {
+        const GestureSample& sample = gestureSamples[i];
+        if (sample.up > 10 && sample.down > 10 &&
+            sample.left > 10 && sample.right > 10) {
+            if (first < 0) first = i;
+            last = i;
+        }
+    }
+    if (first < 0 || last <= first) return 0;
+
+    const GestureSample& start = gestureSamples[first];
+    const GestureSample& end = gestureSamples[last];
+    const int udStart = ((int(start.up) - int(start.down)) * 100) /
+                        (int(start.up) + int(start.down));
+    const int lrStart = ((int(start.left) - int(start.right)) * 100) /
+                        (int(start.left) + int(start.right));
+    const int udEnd = ((int(end.up) - int(end.down)) * 100) /
+                      (int(end.up) + int(end.down));
+    const int lrEnd = ((int(end.left) - int(end.right)) * 100) /
+                      (int(end.left) + int(end.right));
+    const int udDelta = udEnd - udStart;
+    const int lrDelta = lrEnd - lrStart;
+    const bool udDetected = abs(udDelta) >= 50;
+    const bool lrDetected = abs(lrDelta) >= 50;
+
+    if (!udDetected && !lrDetected) return 0;
+    if (udDetected && (!lrDetected || abs(udDelta) > abs(lrDelta))) {
+        return udDelta < 0 ? APDS_GESTURE_UP : APDS_GESTURE_DOWN;
+    }
+    return lrDelta < 0 ? APDS_GESTURE_LEFT : APDS_GESTURE_RIGHT;
 }
 
 uint8_t readSensorGesture() {
-    static uint8_t upCount = 0;
-    static uint8_t downCount = 0;
-    static uint8_t leftCount = 0;
-    static uint8_t rightCount = 0;
-    static unsigned long lastMotionMs = 0;
+    static unsigned long lastErrorMs = 0;
     uint8_t status = 0;
-    if (!readReg(0xAF, status)) {
-        static unsigned long lastErrorMs = 0;
+    if (!readReg(APDS_REG_GSTATUS, status)) {
         if (millis() - lastErrorMs >= 1000) {
             lastErrorMs = millis();
             Serial.println("[Sensor] Failed to read gesture status register 0xAF");
         }
         return 0;
     }
-    const bool fifoOverflow = (status & 0x02) != 0;
-    if (fifoOverflow) {
+
+    uint8_t fifoLevel = 0;
+    if (!readReg(APDS_REG_GFLVL, fifoLevel) || fifoLevel > APDS_GESTURE_SAMPLES_MAX) {
+        if (millis() - lastErrorMs >= 1000) {
+            lastErrorMs = millis();
+            Serial.printf("[Sensor] Invalid gesture FIFO level: %u\n", fifoLevel);
+        }
+        gestureSampleCount = 0;
+        gestureCaptureOverflow = true;
+        return 0;
+    }
+
+    if ((status & 0x02) != 0) {
         static unsigned long lastOverflowLogMs = 0;
         if (millis() - lastOverflowLogMs >= 1000) {
             lastOverflowLogMs = millis();
-            Serial.println("[Sensor] Gesture FIFO overflow; some samples were lost");
+            Serial.println("[Sensor] Gesture FIFO overflow; discarding this gesture");
         }
-    }
-    uint8_t fifoLevel = 0;
-    if (!readReg(0xAE, fifoLevel)) {
-        Serial.println("[Sensor] Failed to read gesture FIFO level register 0xAE");
-        return 0;
-    }
-    if (fifoLevel > 32) {
-        Serial.printf("[Sensor] Invalid gesture FIFO level: %u\n", fifoLevel);
-        return 0;
-    }
-    if (fifoLevel == 0) {
-        static unsigned long lastIdleLogMs = 0;
-        if (millis() - lastIdleLogMs >= 1000) {
-            lastIdleLogMs = millis();
-            uint8_t enable = 0;
-            uint8_t gestureConfig = 0;
-            uint8_t proximity = 0;
-            readReg(0x80, enable);
-            readReg(0xAB, gestureConfig);
-            readReg(0x9C, proximity);
-            Serial.printf("[Gesture] idle: GSTATUS=0x%02X GFLVL=%u ENABLE=0x%02X GCONF4=0x%02X PROX=%u\n",
-                          status, fifoLevel, enable, gestureConfig, proximity);
-        }
-        if (lastMotionMs != 0 && millis() - lastMotionMs > 300) {
-            upCount = downCount = leftCount = rightCount = 0;
-            lastMotionMs = 0;
-        }
-        return 0;
-        
-    }
-    if ((status & 0x01) == 0 && !fifoOverflow) {
-        return 0;
+        gestureCaptureOverflow = true;
     }
 
-    uint8_t detectedGesture = 0;
     for (uint8_t i = 0; i < fifoLevel; ++i) {
         Wire.beginTransmission(APDS_ADDR);
-        Wire.write(0xFC);
+        Wire.write(APDS_REG_GFIFO_U);
         if (Wire.endTransmission(false) != 0 ||
             Wire.requestFrom((uint8_t)APDS_ADDR, (uint8_t)4) != 4) {
-            Serial.println("[Sensor] Failed to read a complete UDLR FIFO sample");
             while (Wire.available()) Wire.read();
-            break;
+            if (millis() - lastErrorMs >= 1000) {
+                lastErrorMs = millis();
+                Serial.println("[Sensor] Failed to read a complete UDLR FIFO sample");
+            }
+            gestureSampleCount = 0;
+            gestureCaptureOverflow = true;
+            return 0;
         }
 
-        const int up = Wire.read();
-        const int down = Wire.read();
-        const int left = Wire.read();
-        const int right = Wire.read();
-        if (detectedGesture != 0 || fifoOverflow) continue;
-
-        const int upDownDiff = (abs(up - down) > 13) ? up - down : 0;
-        const int leftRightDiff = (abs(left - right) > 13) ? left - right : 0;
-        if (upDownDiff == 0 && leftRightDiff == 0) continue;
-        lastMotionMs = millis();
-
-        if (upDownDiff < 0) {
-            if (downCount > 0) detectedGesture = APDS9960_UP;
-            else if (upCount < UINT8_MAX) ++upCount;
-        } else if (upDownDiff > 0) {
-            if (upCount > 0) detectedGesture = APDS9960_DOWN;
-            else if (downCount < UINT8_MAX) ++downCount;
-        }
-
-        if (leftRightDiff < 0) {
-            if (rightCount > 0) detectedGesture = APDS9960_LEFT;
-            else if (leftCount < UINT8_MAX) ++leftCount;
-        } else if (leftRightDiff > 0) {
-            if (leftCount > 0) detectedGesture = APDS9960_RIGHT;
-            else if (rightCount < UINT8_MAX) ++rightCount;
-        }
-
-        if (detectedGesture != 0) {
-            upCount = downCount = leftCount = rightCount = 0;
-            lastMotionMs = 0;
+        GestureSample sample = {
+            uint8_t(Wire.read()), uint8_t(Wire.read()),
+            uint8_t(Wire.read()), uint8_t(Wire.read())
+        };
+        if (gestureSampleCount < APDS_GESTURE_SAMPLES_MAX) {
+            gestureSamples[gestureSampleCount++] = sample;
+        } else {
+            gestureCaptureOverflow = true;
         }
     }
-    if (fifoOverflow) {
-        upCount = downCount = leftCount = rightCount = 0;
-        lastMotionMs = 0;
-        return 0;
-    }
-    if (detectedGesture == 0 && lastMotionMs != 0 && millis() - lastMotionMs > 300) {
-        upCount = downCount = leftCount = rightCount = 0;
-        lastMotionMs = 0;
-    }
-    return detectedGesture;
+
+    if ((status & 0x01) != 0 || fifoLevel > 0) return 0;
+
+    const uint8_t gesture = gestureCaptureOverflow ? 0 : classifyGestureSamples();
+    gestureSampleCount = 0;
+    gestureCaptureOverflow = false;
+    return gesture;
 }
 
 // ==================== 模式 ====================
@@ -330,6 +357,32 @@ NimBLECharacteristic* inpMouse;
 NimBLECharacteristic* inpMedia;
 NimBLEServer* bleServer;
 
+enum HidTapType : uint8_t {
+    HID_TAP_KEYBOARD,
+    HID_TAP_MOUSE_BUTTON,
+    HID_TAP_MEDIA,
+    HID_MOUSE_REPORT
+};
+
+struct HidTap {
+    HidTapType type;
+    uint8_t value;
+    int8_t dx;
+    int8_t dy;
+    int8_t wheel;
+};
+
+constexpr uint8_t HID_TAP_QUEUE_CAPACITY = 12;
+constexpr uint32_t HID_TAP_PRESS_MS = 25;
+HidTap hidTapQueue[HID_TAP_QUEUE_CAPACITY];
+uint8_t hidTapHead = 0;
+uint8_t hidTapTail = 0;
+uint8_t hidTapCount = 0;
+HidTap activeHidTap = {HID_TAP_KEYBOARD, 0, 0, 0, 0};
+bool hidTapActive = false;
+unsigned long hidTapReleaseAt = 0;
+std::atomic<bool> hidTapCancelRequested{false};
+
 #define RID_KEYBOARD 0x01
 #define RID_MOUSE    0x02
 #define RID_MEDIA    0x03
@@ -365,13 +418,17 @@ const uint8_t mediaDesc[] = {
 
 class GestureServerCallbacks : public NimBLEServerCallbacks {
     void onConnect(NimBLEServer* server, NimBLEConnInfo& connInfo) override {
-        (void)connInfo;
-        Serial.printf("[BLE] Connected; active connections: %u\n", server->getConnectedCount());
+        server->updateConnParams(connInfo.getConnHandle(), 12, 24, 0, 600);
+        Serial.printf("[BLE] Connected; active connections: %u; interval=%.1f ms; bonded=%s\n",
+                      server->getConnectedCount(),
+                      connInfo.getConnInterval() * 1.25f,
+                      connInfo.isBonded() ? "yes" : "no");
     }
 
     void onDisconnect(NimBLEServer* server, NimBLEConnInfo& connInfo, int reason) override {
         (void)server;
         (void)connInfo;
+        hidTapCancelRequested.store(true, std::memory_order_relaxed);
         Serial.printf("[BLE] Disconnected; reason=%d; advertising will restart\n", reason);
     }
 
@@ -392,31 +449,103 @@ bool sendHidReport(NimBLECharacteristic* characteristic, const char* reportName)
         Serial.printf("[BLE] %s report notification failed; check pairing and report subscription\n", reportName);
         return false;
     }
-    Serial.printf("[BLE] %s report notification accepted\n", reportName);
     return true;
 }
 
-void sendKb(uint8_t mod, uint8_t key) {
+bool sendKeyboardReport(uint8_t mod, uint8_t key) {
     uint8_t report[7] = {mod, 0, key, 0, 0, 0, 0};
     inpKb->setValue(report, sizeof(report));
-    sendHidReport(inpKb, "keyboard");
+    return sendHidReport(inpKb, "keyboard");
 }
-void releaseKb() { sendKb(0, 0); }
 
-void sendMouse(uint8_t btn, int8_t dx, int8_t dy, int8_t dw) {
+bool sendMouseReport(uint8_t btn, int8_t dx, int8_t dy, int8_t dw) {
     uint8_t report[4] = {btn, (uint8_t)dx, (uint8_t)dy, (uint8_t)dw};
     inpMouse->setValue(report, sizeof(report));
-    sendHidReport(inpMouse, "mouse");
+    return sendHidReport(inpMouse, "mouse");
 }
 
-void sendMediaBit(uint8_t bit) {
-    uint8_t report = (uint8_t)(1 << bit);
+bool sendMediaReport(uint8_t bit, bool pressed) {
+    uint8_t report = pressed ? (uint8_t)(1U << bit) : 0;
     inpMedia->setValue(&report, sizeof(report));
-    sendHidReport(inpMedia, "media");
-    delay(20);
-    report = 0;
-    inpMedia->setValue(&report, sizeof(report));
-    sendHidReport(inpMedia, "media release");
+    return sendHidReport(inpMedia, pressed ? "media" : "media release");
+}
+
+bool sendTapReport(const HidTap& tap, bool pressed) {
+    switch (tap.type) {
+        case HID_TAP_KEYBOARD:
+            return sendKeyboardReport(0, pressed ? tap.value : 0);
+        case HID_TAP_MOUSE_BUTTON:
+            return sendMouseReport(pressed ? tap.value : 0, 0, 0, 0);
+        case HID_TAP_MEDIA:
+            return sendMediaReport(tap.value, pressed);
+        case HID_MOUSE_REPORT:
+            return sendMouseReport(0, tap.dx, tap.dy, tap.wheel);
+    }
+    return false;
+}
+
+void serviceHidTaps() {
+    if (hidTapCancelRequested.exchange(false, std::memory_order_relaxed)) {
+        hidTapHead = hidTapTail = hidTapCount = 0;
+        hidTapActive = false;
+    }
+
+    if (hidTapActive) {
+        if ((int32_t)(millis() - hidTapReleaseAt) < 0) return;
+        sendTapReport(activeHidTap, false);
+        hidTapActive = false;
+    }
+
+    while (hidTapCount > 0) {
+        activeHidTap = hidTapQueue[hidTapHead];
+        hidTapHead = (hidTapHead + 1) % HID_TAP_QUEUE_CAPACITY;
+        --hidTapCount;
+
+        if (activeHidTap.type == HID_MOUSE_REPORT) {
+            sendTapReport(activeHidTap, true);
+            continue;
+        }
+        if (sendTapReport(activeHidTap, true)) {
+            hidTapReleaseAt = millis() + HID_TAP_PRESS_MS;
+            hidTapActive = true;
+            return;
+        }
+    }
+}
+
+bool queueHidTap(HidTapType type, uint8_t value) {
+    if (!bleServer || bleServer->getConnectedCount() == 0) {
+        Serial.println("[BLE] No connected host; skipped HID tap");
+        return false;
+    }
+    if (hidTapCount == HID_TAP_QUEUE_CAPACITY) {
+        Serial.println("[BLE] HID tap queue full; skipped action");
+        return false;
+    }
+
+    hidTapQueue[hidTapTail] = {type, value, 0, 0, 0};
+    hidTapTail = (hidTapTail + 1) % HID_TAP_QUEUE_CAPACITY;
+    ++hidTapCount;
+    serviceHidTaps();
+    return true;
+}
+
+void sendMouse(uint8_t btn, int8_t dx, int8_t dy, int8_t dw) {
+    if (btn == 0 && (hidTapActive || hidTapCount > 0)) {
+        if (!bleServer || bleServer->getConnectedCount() == 0) {
+            sendMouseReport(btn, dx, dy, dw);
+            return;
+        }
+        if (hidTapCount == HID_TAP_QUEUE_CAPACITY) {
+            Serial.println("[BLE] HID report queue full; skipped mouse movement");
+            return;
+        }
+        hidTapQueue[hidTapTail] = {HID_MOUSE_REPORT, 0, dx, dy, dw};
+        hidTapTail = (hidTapTail + 1) % HID_TAP_QUEUE_CAPACITY;
+        ++hidTapCount;
+        return;
+    }
+    sendMouseReport(btn, dx, dy, dw);
 }
 
 bool initBLE() {
@@ -484,10 +613,10 @@ void executeGesture(GDir g) {
     switch (currentMode) {
         case MODE_KB:
             switch (g) {
-                case G_UP:    sendKb(0, 0x4B); releaseKb(); tag = "PageUp"; break;
-                case G_DOWN:  sendKb(0, 0x4E); releaseKb(); tag = "PageDown"; break;
-                case G_LEFT:  sendKb(0, 0x50); releaseKb(); tag = "Left"; break;
-                case G_RIGHT: sendKb(0, 0x28); releaseKb(); tag = "Enter"; break;
+                case G_UP:    queueHidTap(HID_TAP_KEYBOARD, 0x4B); tag = "PageUp"; break;
+                case G_DOWN:  queueHidTap(HID_TAP_KEYBOARD, 0x4E); tag = "PageDown"; break;
+                case G_LEFT:  queueHidTap(HID_TAP_KEYBOARD, 0x50); tag = "Left"; break;
+                case G_RIGHT: queueHidTap(HID_TAP_KEYBOARD, 0x28); tag = "Enter"; break;
                 default: return;
             }
             break;
@@ -510,10 +639,10 @@ void executeGesture(GDir g) {
 
         case MODE_MEDIA:
             switch (g) {
-                case G_UP:    sendMediaBit(0); tag = "Vol+"; break;
-                case G_DOWN:  sendMediaBit(1); tag = "Vol-"; break;
-                case G_LEFT:  sendMediaBit(3); tag = "Prev"; break;
-                case G_RIGHT: sendMediaBit(2); tag = "Next"; break;
+                case G_UP:    queueHidTap(HID_TAP_MEDIA, 0); tag = "Vol+"; break;
+                case G_DOWN:  queueHidTap(HID_TAP_MEDIA, 1); tag = "Vol-"; break;
+                case G_LEFT:  queueHidTap(HID_TAP_MEDIA, 3); tag = "Prev"; break;
+                case G_RIGHT: queueHidTap(HID_TAP_MEDIA, 2); tag = "Next"; break;
                 default: return;
             }
             break;
@@ -532,13 +661,11 @@ void handleProximity(uint16_t prox) {
         lastProxTime = millis();
         switch (currentMode) {
             case MODE_MOUSE:
-                sendMouse(1, 0, 0, 0);
-                delay(30);
-                sendMouse(0, 0, 0, 0);
+                queueHidTap(HID_TAP_MOUSE_BUTTON, 1);
                 Serial.println("[Mouse] Left click (proximity)");
                 break;
             case MODE_MEDIA:
-                sendMediaBit(4); // Play/Pause
+                queueHidTap(HID_TAP_MEDIA, 4);
                 Serial.println("[Media] Play/Pause (proximity)");
                 break;
             default:
@@ -592,46 +719,20 @@ void setup() {
         Serial.println("OLED init failed!");
     }
 
-    // ① 读取并打印芯片 ID；同时确认 I2C 地址 0x39 确实有应答。
+    // Read the chip ID before writing the vendor-supported register set.
     uint8_t sensorId = 0;
-    if (!readReg(0x92, sensorId)) {
+    if (!readReg(APDS_REG_ID, sensorId)) {
         Serial.println("[Sensor] No I2C response at 0x39 or failed to read chip ID");
         while (1) delay(1000);
     }
-    Serial.printf("[Sensor] I2C device at 0x39 responded; chip ID=0x%02X (Adafruit standard: 0xAB)\n",
+    Serial.printf("[Sensor] I2C device at 0x39 responded; chip ID=0x%02X (supported: 0xAB/0x9C)\n",
                   sensorId);
-    if (sensorId == 0x00 || sensorId == 0xFF) {
-        Serial.println("[Sensor] Invalid chip ID; stopping to avoid writing to an unrelated I2C device");
+
+    if (!initializeApds(sensorId)) {
+        Serial.println("[Sensor] Initialization failed; check sensor type, wiring, and register compatibility");
         while (1) delay(1000);
     }
-
-    // 标准芯片使用 Adafruit 初始化；不同 ID 的兼容芯片只通过数据手册寄存器接口初始化。
-    if (sensorId == 0xAB) {
-        if (!apds.begin(10, APDS9960_AGAIN_4X, APDS_ADDR, &Wire)) {
-            Serial.println("[Sensor] Standard APDS9960 initialization failed");
-            while (1) delay(1000);
-        }
-        Serial.println("[Sensor] Standard APDS9960 initialization succeeded");
-        if (!configureGestureRegisters()) {
-            Serial.println("[Sensor] Register configuration verification failed; stopping");
-            while (1) delay(1000);
-        }
-        apds.enableProximity(true);
-        apds.enableGesture(true);
-    } else {
-        Serial.println("[Sensor] Nonstandard ID; trying compatible init. Confirm APDS9960 register compatibility");
-        if (!initializeCompatibleApds()) {
-            Serial.println("[Sensor] Compatible initialization failed; stopping");
-            while (1) delay(1000);
-        }
-    }
-
-    uint8_t enableReg = 0;
-    if (!readReg(0x80, enableReg) || enableReg != 0x45) {
-        Serial.printf("[Sensor] Enable verification failed: ENABLE expected 0x45, got 0x%02X\n", enableReg);
-        while (1) delay(1000);
-    }
-    Serial.println("[Sensor] Proximity and gesture enabled; ENABLE=0x45");
+    Serial.println("[Sensor] Proximity and gesture enabled; ENABLE=0x4D, GCONF4=0x01");
 
     if (!initBLE()) {
         while (1) delay(1000);
@@ -644,6 +745,8 @@ void setup() {
 
 // ==================== 主循环 ====================
 void loop() {
+    serviceHidTaps();
+
     // 蜂鸣器自动停止
     if (beepEndMs && millis() >= beepEndMs) {
         ledcWrite(BUZZER_CHANNEL, 0);
@@ -665,8 +768,10 @@ void loop() {
     bootWasLow = bootNow;
 
     // ---- 接近度 ----
-    uint16_t proximity = readSensorProximity();
-    handleProximity(proximity);
+    uint8_t proximity = 0;
+    if (readSensorProximity(proximity)) {
+        handleProximity(proximity);
+    }
 
     // ---- 手势读取 ----
     uint8_t raw = readSensorGesture();
@@ -674,10 +779,10 @@ void loop() {
     if (raw) {
         const char* rawName = "未知";
         switch (raw) {
-            case APDS9960_UP:    dir = G_UP;    rawName = "UP"; break;
-            case APDS9960_DOWN:  dir = G_DOWN;  rawName = "DOWN"; break;
-            case APDS9960_LEFT:  dir = G_LEFT;  rawName = "LEFT"; break;
-            case APDS9960_RIGHT: dir = G_RIGHT; rawName = "RIGHT"; break;
+            case APDS_GESTURE_UP:    dir = G_UP;    rawName = "UP"; break;
+            case APDS_GESTURE_DOWN:  dir = G_DOWN;  rawName = "DOWN"; break;
+            case APDS_GESTURE_LEFT:  dir = G_LEFT;  rawName = "LEFT"; break;
+            case APDS_GESTURE_RIGHT: dir = G_RIGHT; rawName = "RIGHT"; break;
         }
         // ④ 只在传感器报告到手势时打印原始值，避免空闲时刷屏。
         Serial.printf("[Gesture] Sensor raw value=0x%02X, direction=%s\n", raw, rawName);
@@ -740,9 +845,17 @@ void loop() {
         lastBleStatusMs = millis();
         if (bleServer) {
             NimBLEAdvertising* advertising = bleServer->getAdvertising();
+            const uint8_t connections = bleServer->getConnectedCount();
+            if (connections == 0 && advertising && !advertising->isAdvertising()) {
+                if (advertising->start()) {
+                    Serial.println("[BLE] Advertising watchdog restarted advertising");
+                } else {
+                    Serial.println("[BLE] Advertising watchdog failed to restart advertising");
+                }
+            }
             Serial.printf("[BLE status] connections=%u, advertising=%s\n",
-                          bleServer->getConnectedCount(),
-                          advertising && advertising->isAdvertising() ? "contine..." : "advertising stopped");
+                          connections,
+                          advertising && advertising->isAdvertising() ? "continue..." : "advertising stopped");
         }
     }
 

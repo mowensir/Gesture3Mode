@@ -25,8 +25,8 @@
 
 说明：
 - 短按开发板自带 `BOOT` 键（GPIO0）循环切换 `1.Keyboard -> 2.Mouse -> 3.Media -> 1.Keyboard`。
-- OLED 会显示当前模式、最近手势和 `BOOT=switch`。
-- 每次有效动作都会发出一次短促蜂鸣提示。
+- OLED 显示当前模式、最近识别到的手势和 `BOOT=switch`；手势提示约 850 ms 后会被定时刷新清除。
+- 无源蜂鸣器由 GPIO5 输出 4 kHz、约 50% 占空比的 PWM 音调；上电时提示约 90 ms，切换模式时提示约 60 ms。普通手势和接近度动作本身不会蜂鸣。
 - BLE 设备名称固定为 `Gesture3Mode`，通过 HID 报告提供键盘、鼠标和媒体功能。
 
 ## 硬件连接
@@ -51,14 +51,9 @@
 
 ### 1. APDS9960 初始化
 
-工程会先读取传感器 `0x92` 处的 chip ID：
-- 若为标准 APDS9960，ID 为 `0xAB`，调用 `apds.begin()` 初始化。
-- 若为非标准/兼容模块，代码会绕过 `Adafruit_APDS9960.begin()`，直接按 APDS9960 寄存器映射执行初始化。
+工程先读取传感器 `0x92` 处的 chip ID，只接受厂商 SparkFun 库明确支持的 `0xAB` 和 `0x9C`。初始化寄存器值及手势引擎启动顺序参照参考资料中的 SparkFun APDS-9960 库；未知 ID 会停止初始化，避免向不确定的 I²C 设备写寄存器。
 
-初始化过程包括：
-- 读取 `GSTATUS (0xAF)` / `GFLVL (0xAE)` / 手势 FIFO (`0xFC`–`0xFF`)
-- 通过寄存器写入校验，确认接近度和手势引擎已启用
-- 检查 `ENABLE` 寄存器是否为 `0x45`，即 `proximity + gesture enabled`
+手势采集保持主循环轮询，不使用厂商 `readGesture()` 中等待手势完成的阻塞循环：每轮读取 FIFO 数据，最多缓存 32 组，等 `GVALID` 清除后再按厂商算法比较有效数据的首尾通道比例。FIFO 溢出或采样无效时丢弃该次手势。最终检查 `ENABLE=0x4D`（PON/WEN/PEN/GEN）和 `GCONF4=0x01`。
 
 ### 2. 圆弧识别
 
@@ -80,18 +75,29 @@
 - 以 `Gesture3Mode` 名称广播并提供 HID service
 
 代码中连接实际使用的是一个设备名，而不是按模式拆分成多个蓝牙设备。
+手势动作通过 BLE HID 通知发送；未连接主机时不会缓存或补发动作。断开连接后自动重新广播，并由每 5 秒一次的状态检查兜底恢复意外停止的广播。连接时设备会请求 15–30 ms 的连接间隔、0 延迟和 6 秒 supervision timeout；最终参数由主机协商决定。连接后会记录实际 interval 和 bonding 状态。
+
+键盘按键、媒体键和鼠标左键点击由同一个非阻塞状态机发送：按下报告发出后至少保持约 25 ms，再发送释放报告；期间到来的点击及鼠标移动/滚轮报告按顺序排队（最多 12 项）。队列满时会明确记录并丢弃新动作。BLE 断开时会清除正在等待的点击，避免重连后补发旧操作。主循环不再为 HID 点击/媒体键释放调用阻塞延时；成功通知不逐条写串口，避免频繁串口输出拖慢主循环，通知失败仍会记录错误。
+
+### 4. 其它外围设备和按键
+
+- **OLED SSD1306**：使用 I²C 地址 `0x3C`、GPIO21/22。初始化失败时只打印错误并继续运行，其它功能不依赖 OLED。屏幕显示模式、最近识别方向/圆弧方向，以及 `BOOT=switch`；屏幕约每 850 ms 刷新一次并把手势栏清为 `-`，因此方向显示时间最长不到 850 ms。
+- **无源蜂鸣器**：GPIO5 使用 LEDC 输出 4 kHz、8 位分辨率、占空比 128（约 50%）的方波；通过主循环计时关闭，不使用持续阻塞延时。它只在启动和切换模式时鸣叫，不表示 BLE 动作成功。
+- **BOOT 按键**：GPIO0 配置为上拉输入，按下时为低电平；只在按下沿切换模式，并用约 280 ms 的间隔过滤抖动。GPIO0 也是 ESP32 启动配置相关引脚，正常运行时短按即可，烧录时按板卡要求进入下载模式。
 
 ## 工程结构
 
 ```text
-GestureBleController/
+gesture/
 ├── platformio.ini
 ├── README.md
-├── lib/
-│   └── NimBLEMouse/
+├── include/
+│   └── README.md
 └── src/
     └── main.cpp
 ```
+
+仓库还包含 `test/README.md`；PlatformIO 的 `.pio/` 为本机构建生成目录，不属于源代码结构。
 
 ## 编译与烧录
 
@@ -104,8 +110,9 @@ pio run -t upload
 ```
 
 4. 观察串口输出，确认以下日志正常：
-- `[Sensor] I2C device at 0x39 responded; chip ID=0xXX`
-- `[Sensor] Standard APDS9960 initialization succeeded`
+- `[Sensor] I2C device at 0x39 responded; chip ID=0xAB` 或 `0x9C`
+- `[Sensor] Factory-compatible initialization complete`
+- `[Sensor] Proximity and gesture enabled; ENABLE=0x4D, GCONF4=0x01`
 - `[BLE] HID service started and advertising as Gesture3Mode`
 
 5. 打开串口监视器，波特率设为 `115200`。
@@ -119,11 +126,12 @@ pio run -t upload
 
 ## 使用方法
 
-1. 上电后，OLED 会显示当前模式，例如 `Mode: 1.Keyboard`。
+1. 上电后，蜂鸣器鸣叫约 90 ms；若 OLED 初始化成功，会显示当前模式，例如 `Mode: 1.Keyboard`。
 2. 通过短按 `BOOT` 键切换模式。`BOOT` 触发间隔需要大于约 `280ms`，否则会忽略抖动。
 3. 使用蓝牙设备搜索并连接 `Gesture3Mode`。
 4. 站在设备前约 5cm 左右挥手，手不要太近或太远，避免接近度饱和。
 5. 若在鼠标模式时接近度超过阈值，会触发左键单击；媒体模式会触发播放/暂停。
+6. 模式切换时蜂鸣器鸣叫约 60 ms；识别手势时 OLED 短暂显示方向，但不会因此蜂鸣。
 
 ## 调试建议
 
@@ -135,11 +143,13 @@ pio run -t upload
 
 ## 依赖项
 
+- `adafruit/Adafruit BusIO`
 - `adafruit/Adafruit SSD1306`
 - `adafruit/Adafruit GFX Library`
-- `adafruit/Adafruit APDS9960`
-- `h2zero/NimBLE-Arduino`
-- `lib/NimBLEMouse`（本项目内自定义/修补版本）
+- `NimBLE-Arduino`
+- `ul-gh/ESP32Touch`（在 PlatformIO 配置中声明）
+
+APDS9960 通过 `Wire` 直接访问厂商兼容寄存器，不再依赖 Adafruit APDS9960 库；BLE HID 由 NimBLE 库直接实现，工程中没有 `lib/NimBLEMouse` 目录。
 
 ## 许可证
 
