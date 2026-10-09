@@ -51,9 +51,11 @@
 
 ### 1. APDS9960 初始化
 
-工程先读取传感器 `0x92` 处的 chip ID，只接受厂商 SparkFun 库明确支持的 `0xAB` 和 `0x9C`。初始化寄存器值及手势引擎启动顺序参照参考资料中的 SparkFun APDS-9960 库；未知 ID 会停止初始化，避免向不确定的 I²C 设备写寄存器。
+工程在 `lib/SparkFun_APDS9960/` vendoring SparkFun APDS-9960 Arduino Library 1.4.1，并保留上游 `LICENSE.md`、`library.properties` 和源码归属。传感器模块先读 ID，再调用库的 `init()` 和 `enableGestureSensor(false)`；仅接受上游支持的 `0xAB`、`0x9C`，未知 ID 不会触发寄存器写入。I²C 总线由主程序在 OLED 初始化前配置为 GPIO21/22，库适配版不会重复调用无参数 `Wire.begin()`，避免重置共享总线。
 
-手势采集保持主循环轮询，不使用厂商 `readGesture()` 中等待手势完成的阻塞循环：每轮读取 FIFO 数据，最多缓存 32 组，等 `GVALID` 清除后再按厂商算法比较有效数据的首尾通道比例。FIFO 溢出或采样无效时丢弃该次手势。最终检查 `ENABLE=0x4D`（PON/WEN/PEN/GEN）和 `GCONF4=0x01`。
+为保持主循环非阻塞，项目在 SparkFun 类中增加 `readGestureNonBlocking()`：每次调用只轮询/读取当前 FIFO，不等待手势结束；采集最多 32 组数据，在 `GVALID` 清除且 FIFO 静默达到库的 30 ms 间隔后，调用 SparkFun 原有 `processGestureData()` / `decodeGesture()` 输出结果。FIFO 溢出、超过缓存上限或 I²C 读取失败时丢弃当前手势。初始化后检查 `ENABLE=0x4D`（PON/WEN/PEN/GEN）和 `GCONF4=0x01`。
+
+本地适配还修正了上游 I²C 读操作未检查实际返回字节数、块写操作错误写入数据，以及共享 `Wire` 总线初始化的问题。完整上游许可证和源文件保存在 `lib/SparkFun_APDS9960/`；本地接口扩展见该目录的 README。
 
 ### 2. 圆弧识别
 
@@ -91,9 +93,17 @@
 gesture/
 ├── platformio.ini
 ├── README.md
+├── lib/
+│   └── SparkFun_APDS9960/
+│       ├── LICENSE.md
+│       └── src/
+│           ├── SparkFun_APDS9960.cpp
+│           └── SparkFun_APDS9960.h
 ├── include/
 │   └── README.md
 └── src/
+    ├── ApdsSensor.cpp
+    ├── ApdsSensor.h
     └── main.cpp
 ```
 
@@ -110,9 +120,7 @@ pio run -t upload
 ```
 
 4. 观察串口输出，确认以下日志正常：
-- `[Sensor] I2C device at 0x39 responded; chip ID=0xAB` 或 `0x9C`
-- `[Sensor] Factory-compatible initialization complete`
-- `[Sensor] Proximity and gesture enabled; ENABLE=0x4D, GCONF4=0x01`
+- `[Sensor] SparkFun APDS9960 initialized (ID=0xAB, ENABLE=0x4D)`（ID 也可能是 `0x9C`）
 - `[BLE] HID service started and advertising as Gesture3Mode`
 
 5. 打开串口监视器，波特率设为 `115200`。
@@ -136,21 +144,20 @@ pio run -t upload
 ## 调试建议
 
 - OLED 不亮：先单独用 SSD1306 示例程序确认 I²C 地址和接线；若模块焊盘在 `0x7A` 侧，可能需要检查实际地址。
-- APDS 初始化失败：查看串口输出 `[Sensor] No I2C response at 0x39`，检查 3.3V、电源地、SDA/SCL 接线，以及模块是否兼容 APDS9960 寄存器布局。
-- 手势不灵敏：观察 `[Gesture] Sensor raw value=...` 日志，调整手势距离和挥动轨迹。
+- APDS 初始化失败：查看 `[Sensor]` 后续诊断，检查 3.3V、电源地、SDA/SCL 接线及芯片 ID。
+- 手势不灵敏：观察 `[Gesture] SparkFun direction=...` 日志，调整手势距离和挥动轨迹。
 - BLE 连接异常：确认目标设备蓝牙已打开，并处于可配对状态；设备名称为 `Gesture3Mode`。
 - 误触发：`handleProximity()` 中的阈值为 `150`，如果环境较灵敏，可适当微调。
 
 ## 依赖项
 
-- `adafruit/Adafruit BusIO`
 - `adafruit/Adafruit SSD1306`
 - `adafruit/Adafruit GFX Library`
 - `NimBLE-Arduino`
 - `ul-gh/ESP32Touch`（在 PlatformIO 配置中声明）
 
-APDS9960 通过 `Wire` 直接访问厂商兼容寄存器，不再依赖 Adafruit APDS9960 库；BLE HID 由 NimBLE 库直接实现，工程中没有 `lib/NimBLEMouse` 目录。
+APDS9960 使用项目内 vendoring 的 SparkFun 1.4.1 驱动（含原始许可证及本地非阻塞扩展）；BLE HID 由 NimBLE 库直接实现。
 
 ## 许可证
 
-本项目代码采用 MIT 开源协议，供学习和非商业用途参考。第三方库请遵守其各自许可证条款。
+本项目自有代码采用 MIT 开源协议。vendored 的 SparkFun APDS9960 驱动遵循其 `lib/SparkFun_APDS9960/LICENSE.md` 中保留的上游 Beerware 许可与归属说明；其它第三方依赖遵守各自许可证。

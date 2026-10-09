@@ -11,6 +11,7 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include "ApdsSensor.h"
 #include <NimBLEDevice.h>
 #include <NimBLEHIDDevice.h>
 #include <NimBLECharacteristic.h>
@@ -25,14 +26,6 @@
 #define SCREEN_H    64
 #define BUZZER_PIN  5
 #define BOOT_PIN    0
-#define APDS_ADDR   0x39
-
-enum : uint8_t {
-    APDS_GESTURE_UP = 0x01,
-    APDS_GESTURE_DOWN = 0x02,
-    APDS_GESTURE_LEFT = 0x03,
-    APDS_GESTURE_RIGHT = 0x04
-};
 
 // ==================== 蜂鸣器PWM ====================
 #define BUZZER_CHANNEL 0
@@ -50,225 +43,7 @@ Adafruit_SSD1306 display(SCREEN_W, SCREEN_H, &Wire, -1);
 bool oledOK = false;
 
 // ==================== APDS9960 ====================
-constexpr uint8_t APDS_REG_ENABLE = 0x80;
-constexpr uint8_t APDS_REG_ID = 0x92;
-constexpr uint8_t APDS_REG_PDATA = 0x9C;
-constexpr uint8_t APDS_REG_GCONF4 = 0xAB;
-constexpr uint8_t APDS_REG_GFLVL = 0xAE;
-constexpr uint8_t APDS_REG_GSTATUS = 0xAF;
-constexpr uint8_t APDS_REG_GFIFO_U = 0xFC;
-constexpr uint8_t APDS_ID_STANDARD = 0xAB;
-constexpr uint8_t APDS_ID_COMPATIBLE = 0x9C;
-constexpr uint8_t APDS_ENABLE_GESTURE = 0x4D;
-constexpr uint8_t APDS_GESTURE_SAMPLES_MAX = 32;
-
-struct GestureSample {
-    uint8_t up;
-    uint8_t down;
-    uint8_t left;
-    uint8_t right;
-};
-
-GestureSample gestureSamples[APDS_GESTURE_SAMPLES_MAX];
-uint8_t gestureSampleCount = 0;
-bool gestureCaptureOverflow = false;
-
-bool writeReg(uint8_t reg, uint8_t val) {
-    Wire.beginTransmission(APDS_ADDR);
-    Wire.write(reg);
-    Wire.write(val);
-    return (Wire.endTransmission() == 0);
-}
-
-bool readReg(uint8_t reg, uint8_t& val) {
-    Wire.beginTransmission(APDS_ADDR);
-    Wire.write(reg);
-    if (Wire.endTransmission(false) != 0 ||
-        Wire.requestFrom((uint8_t)APDS_ADDR, (uint8_t)1) != 1) {
-        return false;
-    }
-    val = Wire.read();
-    return true;
-}
-
-bool writeRegChecked(uint8_t reg, uint8_t val) {
-    if (!writeReg(reg, val)) {
-        Serial.printf("[Sensor] Register 0x%02X write failed\n", reg);
-        return false;
-    }
-
-    uint8_t actual = 0;
-    if (!readReg(reg, actual)) {
-        Serial.printf("[Sensor] Register 0x%02X read-back failed\n", reg);
-        return false;
-    }
-    if (actual != val) {
-        Serial.printf("[Sensor] Register 0x%02X mismatch: wrote 0x%02X, read 0x%02X\n",
-                      reg, val, actual);
-        return false;
-    }
-    Serial.printf("[Sensor] Register 0x%02X verified: 0x%02X\n", reg, actual);
-    return true;
-}
-
-bool initializeApds(uint8_t sensorId) {
-    if (sensorId != APDS_ID_STANDARD && sensorId != APDS_ID_COMPATIBLE) {
-        Serial.printf("[Sensor] Unsupported chip ID 0x%02X; expected 0xAB or 0x9C\n",
-                      sensorId);
-        return false;
-    }
-
-    // Register defaults and gesture startup sequence follow the supplied SparkFun APDS-9960 library.
-    const uint8_t defaults[][2] = {
-        {0x80, 0x00}, {0x81, 219}, {0x83, 246}, {0x8E, 0x87},
-        {0x9D, 0x00}, {0x9E, 0x00}, {0x8D, 0x60}, {0x8F, 0x09},
-        {0x89, 0x00}, {0x8B, 50}, {0x84, 0xFF}, {0x85, 0xFF},
-        {0x86, 0x00}, {0x87, 0x00}, {0x8C, 0x11}, {0x90, 0x01},
-        {0x9F, 0x00}, {0xA0, 40}, {0xA1, 30}, {0xA2, 0x40},
-        {0xA3, 0x41}, {0xA4, 0x00}, {0xA5, 0x00}, {0xA7, 0x00},
-        {0xA9, 0x00}, {0xA6, 0xC9}, {0xAA, 0x00}, {0xAB, 0x00}
-    };
-    for (const auto& setting : defaults) {
-        if (!writeRegChecked(setting[0], setting[1])) return false;
-    }
-
-    // SparkFun enableGestureSensor(false): wait, proximity pulse/LED boost, then PON/WEN/PEN/GEN.
-    const uint8_t gestureStartup[][2] = {
-        {0x83, 0xFF}, {0x8E, 0x89}, {0x90, 0x31},
-        {0xAB, 0x01}, {0x80, 0x01}, {0x80, 0x09},
-        {0x80, 0x0D}, {0x80, APDS_ENABLE_GESTURE}
-    };
-    for (const auto& setting : gestureStartup) {
-        if (!writeRegChecked(setting[0], setting[1])) return false;
-    }
-
-    uint8_t enabled = 0;
-    uint8_t gestureMode = 0;
-    if (!readReg(APDS_REG_ENABLE, enabled) || enabled != APDS_ENABLE_GESTURE ||
-        !readReg(APDS_REG_GCONF4, gestureMode) || gestureMode != 0x01) {
-        Serial.printf("[Sensor] Startup verification failed: ENABLE=0x%02X GCONF4=0x%02X\n",
-                      enabled, gestureMode);
-        return false;
-    }
-
-    Serial.printf("[Sensor] Factory-compatible initialization complete (ID=0x%02X)\n",
-                  sensorId);
-    return true;
-}
-
-bool readSensorProximity(uint8_t& proximity) {
-    if (!readReg(APDS_REG_PDATA, proximity)) {
-        static unsigned long lastErrorMs = 0;
-        if (millis() - lastErrorMs >= 1000) {
-            lastErrorMs = millis();
-            Serial.println("[Sensor] Failed to read proximity register 0x9C");
-        }
-        return false;
-    }
-    return true;
-}
-
-uint8_t classifyGestureSamples() {
-    if (gestureSampleCount <= 4) return 0;
-
-    int first = -1;
-    int last = -1;
-    for (uint8_t i = 0; i < gestureSampleCount; ++i) {
-        const GestureSample& sample = gestureSamples[i];
-        if (sample.up > 10 && sample.down > 10 &&
-            sample.left > 10 && sample.right > 10) {
-            if (first < 0) first = i;
-            last = i;
-        }
-    }
-    if (first < 0 || last <= first) return 0;
-
-    const GestureSample& start = gestureSamples[first];
-    const GestureSample& end = gestureSamples[last];
-    const int udStart = ((int(start.up) - int(start.down)) * 100) /
-                        (int(start.up) + int(start.down));
-    const int lrStart = ((int(start.left) - int(start.right)) * 100) /
-                        (int(start.left) + int(start.right));
-    const int udEnd = ((int(end.up) - int(end.down)) * 100) /
-                      (int(end.up) + int(end.down));
-    const int lrEnd = ((int(end.left) - int(end.right)) * 100) /
-                      (int(end.left) + int(end.right));
-    const int udDelta = udEnd - udStart;
-    const int lrDelta = lrEnd - lrStart;
-    const bool udDetected = abs(udDelta) >= 50;
-    const bool lrDetected = abs(lrDelta) >= 50;
-
-    if (!udDetected && !lrDetected) return 0;
-    if (udDetected && (!lrDetected || abs(udDelta) > abs(lrDelta))) {
-        return udDelta < 0 ? APDS_GESTURE_UP : APDS_GESTURE_DOWN;
-    }
-    return lrDelta < 0 ? APDS_GESTURE_LEFT : APDS_GESTURE_RIGHT;
-}
-
-uint8_t readSensorGesture() {
-    static unsigned long lastErrorMs = 0;
-    uint8_t status = 0;
-    if (!readReg(APDS_REG_GSTATUS, status)) {
-        if (millis() - lastErrorMs >= 1000) {
-            lastErrorMs = millis();
-            Serial.println("[Sensor] Failed to read gesture status register 0xAF");
-        }
-        return 0;
-    }
-
-    uint8_t fifoLevel = 0;
-    if (!readReg(APDS_REG_GFLVL, fifoLevel) || fifoLevel > APDS_GESTURE_SAMPLES_MAX) {
-        if (millis() - lastErrorMs >= 1000) {
-            lastErrorMs = millis();
-            Serial.printf("[Sensor] Invalid gesture FIFO level: %u\n", fifoLevel);
-        }
-        gestureSampleCount = 0;
-        gestureCaptureOverflow = true;
-        return 0;
-    }
-
-    if ((status & 0x02) != 0) {
-        static unsigned long lastOverflowLogMs = 0;
-        if (millis() - lastOverflowLogMs >= 1000) {
-            lastOverflowLogMs = millis();
-            Serial.println("[Sensor] Gesture FIFO overflow; discarding this gesture");
-        }
-        gestureCaptureOverflow = true;
-    }
-
-    for (uint8_t i = 0; i < fifoLevel; ++i) {
-        Wire.beginTransmission(APDS_ADDR);
-        Wire.write(APDS_REG_GFIFO_U);
-        if (Wire.endTransmission(false) != 0 ||
-            Wire.requestFrom((uint8_t)APDS_ADDR, (uint8_t)4) != 4) {
-            while (Wire.available()) Wire.read();
-            if (millis() - lastErrorMs >= 1000) {
-                lastErrorMs = millis();
-                Serial.println("[Sensor] Failed to read a complete UDLR FIFO sample");
-            }
-            gestureSampleCount = 0;
-            gestureCaptureOverflow = true;
-            return 0;
-        }
-
-        GestureSample sample = {
-            uint8_t(Wire.read()), uint8_t(Wire.read()),
-            uint8_t(Wire.read()), uint8_t(Wire.read())
-        };
-        if (gestureSampleCount < APDS_GESTURE_SAMPLES_MAX) {
-            gestureSamples[gestureSampleCount++] = sample;
-        } else {
-            gestureCaptureOverflow = true;
-        }
-    }
-
-    if ((status & 0x01) != 0 || fifoLevel > 0) return 0;
-
-    const uint8_t gesture = gestureCaptureOverflow ? 0 : classifyGestureSamples();
-    gestureSampleCount = 0;
-    gestureCaptureOverflow = false;
-    return gesture;
-}
+ApdsSensor apds;
 
 // ==================== 模式 ====================
 enum Mode : uint8_t { MODE_KB = 0, MODE_MOUSE, MODE_MEDIA, MODE_N };
@@ -719,20 +494,13 @@ void setup() {
         Serial.println("OLED init failed!");
     }
 
-    // Read the chip ID before writing the vendor-supported register set.
     uint8_t sensorId = 0;
-    if (!readReg(APDS_REG_ID, sensorId)) {
-        Serial.println("[Sensor] No I2C response at 0x39 or failed to read chip ID");
+    if (!apds.begin(sensorId)) {
+        Serial.println("[Sensor] APDS9960 initialization failed; see sensor diagnostics above");
         while (1) delay(1000);
     }
-    Serial.printf("[Sensor] I2C device at 0x39 responded; chip ID=0x%02X (supported: 0xAB/0x9C)\n",
+    Serial.printf("[Sensor] I2C device at 0x39 initialized; chip ID=0x%02X\n",
                   sensorId);
-
-    if (!initializeApds(sensorId)) {
-        Serial.println("[Sensor] Initialization failed; check sensor type, wiring, and register compatibility");
-        while (1) delay(1000);
-    }
-    Serial.println("[Sensor] Proximity and gesture enabled; ENABLE=0x4D, GCONF4=0x01");
 
     if (!initBLE()) {
         while (1) delay(1000);
@@ -769,23 +537,24 @@ void loop() {
 
     // ---- 接近度 ----
     uint8_t proximity = 0;
-    if (readSensorProximity(proximity)) {
+    if (apds.readProximity(proximity)) {
         handleProximity(proximity);
     }
 
     // ---- 手势读取 ----
-    uint8_t raw = readSensorGesture();
+    const ApdsGesture raw = apds.readGesture();
     GDir dir = G_NONE;
-    if (raw) {
-        const char* rawName = "未知";
+    if (raw != ApdsGesture::None) {
+        const char* rawName = "unknown";
         switch (raw) {
-            case APDS_GESTURE_UP:    dir = G_UP;    rawName = "UP"; break;
-            case APDS_GESTURE_DOWN:  dir = G_DOWN;  rawName = "DOWN"; break;
-            case APDS_GESTURE_LEFT:  dir = G_LEFT;  rawName = "LEFT"; break;
-            case APDS_GESTURE_RIGHT: dir = G_RIGHT; rawName = "RIGHT"; break;
+            case ApdsGesture::Up:    dir = G_UP;    rawName = "UP"; break;
+            case ApdsGesture::Down:  dir = G_DOWN;  rawName = "DOWN"; break;
+            case ApdsGesture::Left:  dir = G_LEFT;  rawName = "LEFT"; break;
+            case ApdsGesture::Right: dir = G_RIGHT; rawName = "RIGHT"; break;
+            default: break;
         }
         // ④ 只在传感器报告到手势时打印原始值，避免空闲时刷屏。
-        Serial.printf("[Gesture] Sensor raw value=0x%02X, direction=%s\n", raw, rawName);
+        Serial.printf("[Gesture] SparkFun direction=%s\n", rawName);
     }
 
     GDir gesturesToExecute[ARC_MAX + 1];
