@@ -101,7 +101,7 @@ Adafruit GFX Library                 version 1.11.5
 | 上滑 | Tab (0x2B) | 切换到下一个链接/控件 |
 | 下滑 | Shift+Tab (0x2B + modifier) | 切换到上一个链接/控件 |
 | 靠近 | Enter (0x28) | 打开选中的链接/确认 |
-| 远离 | Ctrl+H (键码 0x0B，Ctrl modifier 0x01) | PowerPoint 放映时隐藏指针；其他应用中的行为由应用决定 |
+| 远离 | 空操作 | 无动作 |
 | 顺时针 | Consumer VOL+ (0xE9) ×3 | 音量加 |
 | 逆时针 | Consumer VOL- (0xEA) ×3 | 音量减 |
 | 挥手 | Consumer Mute (0xE2) | 静音切换 |
@@ -191,7 +191,7 @@ OLED 屏幕（128×64）实时显示以下信息：
 - `oledShow()` 无参数绘制状态页；`lastGestureTag` 只在动作处理时更新，周期刷新不会清空最近手势。
 - 每 2 秒读取一次当前连接的 RSSI，并与 OLED 状态页刷新分开处理；RSSI 首次读取前显示 `--dBm`，信号格不填充。
 - 手势处理、模式切换及 BLE 连接状态变化都会立即刷新 OLED；未连接或读 RSSI 失败时不伪造信号值。
-- 累计数和最近手势时间只在当前模式已处理的手势更新；Media 模式的“远离”是有意配置的空动作，也计入统计。
+- 累计数和最近手势时间只在当前模式已处理的手势更新；Presenter 和 Media 模式的“远离”是有意配置的空动作，也计入统计。
 
 ### 方案优势对比
 
