@@ -366,6 +366,6 @@ PAJ7620 手势进入时间为 200 ms，退出时间为 500 ms，手势识别冷�
 
 ---
 
-**作者**：Your Name
+**作者**：mowensir
 **日期**：2026-10-14
-**仓库地址**：https://github.com/yourname/Gesture3Mode
+**仓库地址**：https://github.com/mowensir/Gesture3Mode
