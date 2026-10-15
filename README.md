@@ -115,7 +115,7 @@ Adafruit GFX Library                 version 1.11.5
 | 上滑 | Tab (0x2B) | 切换到下一个链接/控件 |
 | 下滑 | Shift+Tab | 切换到上一个链接/控件 |
 | 靠近 | Enter (0x28) | 打开选中的链接 |
-| 远离 | Ctrl+W (0x1A + modifier) | 关闭当前标签页 |
+| 远离 | Ctrl + R（修饰符 `KEY_MOD_LEFT_CTRL`，键码 `0x15`） | 返回上一级 |
 | 顺时针 | Ctrl+Shift+= (键码 0x2E，modifier 0x03) | 放大页面（依赖键盘布局） |
 | 逆时针 | Ctrl+- (键码 0x2D，Ctrl modifier 0x01) | 缩小页面 |
 | 挥手 | Home (0x4A) | 回到页面顶部 |

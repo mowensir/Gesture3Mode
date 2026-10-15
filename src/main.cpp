@@ -381,7 +381,7 @@ static void doGesture(Gesture g) {
             case GES_UP:              sendKey(0x2B);           tag = "Tab";          break;
             case GES_DOWN:            sendKey(0x02, 0x2B);     tag = "Shift+Tab";    break;
             case GES_FORWARD:         sendKey(0x28);           tag = "Enter";        break;
-            case GES_BACKWARD:        sendKey(0x01, 0x1A);     tag = "Ctrl+W";       break;
+            case GES_BACKWARD:        sendKey(0x01, 0x15);     tag = "Ctrl+R";       break;
             case GES_CLOCKWISE:       sendKey(0x03, 0x2E);     tag = "ZoomIn";       break;
             case GES_ANTICLOCKWISE:   sendKey(0x01, 0x2D);     tag = "ZoomOut";      break;
             case GES_WAVE:            sendKey(0x4A);           tag = "Home";         break;
