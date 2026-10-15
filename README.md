@@ -357,7 +357,7 @@ PAJ7620 手势进入时间为 200 ms，退出时间为 500 ms，手势识别冷�
 
 - PAJ7620U2 数据手册
 - [RevEng_PAJ7620 库文档](https://github.com/RevEng-Community/RevEng_PAJ7620)
-- [NimBLE-Arduino 示例](https://github.com/h2zero/NimBLE-Arduino)
+- [NimBLE-Arduino 示例](htstps://github.com/h2zero/NimBLE-Arduino)
 - ESP32 技术参考手册
 
 ### 许可
@@ -366,6 +366,6 @@ PAJ7620 手势进入时间为 200 ms，退出时间为 500 ms，手势识别冷�
 
 ---
 
-**作者**：mowensir
+**作者**：mociyun19997
 **日期**：2026-10-14
-**仓库地址**：https://github.com/mowensir/Gesture3Mode
+**仓库地址**：https://github.com/mociyun19997/Gesture3Mode
