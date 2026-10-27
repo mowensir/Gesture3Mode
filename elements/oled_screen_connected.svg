@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="background: #ffffff; color-scheme: light;" width="384" height="192" viewBox="0 0 384 192">
+  <rect x="0" y="0" width="384" height="192" fill="#ffffff"/>
+  <!-- 128x64 OLED 屏幕 · 已连接蓝牙（信号良好）· 3x 放大 -->
+  <rect x="3" y="3" width="378" height="186" rx="12" fill="#0A0A0A" stroke="#3A3F44" stroke-width="3"/>
+  <g font-family="Consolas, 'Courier New', monospace" font-size="17" fill="#EAF6FF">
+    <text x="16" y="35">Gesture 3Mode</text>
+    <text x="16" y="73">Mode: Presenter</text>
+    <text x="16" y="103">Gesture: PageUp</text>
+    <text x="16" y="133">BLE: linked  -52dBm</text>
+    <text x="16" y="163">Total:37  Last:3s</text>
+  </g>
+  <!-- RSSI 信号条：4 格全满（≥-50 dBm；阈值 -50/-65/-80 dBm） -->
+  <g stroke="#EAF6FF" stroke-width="1.5">
+    <rect x="240" y="26" width="7" height="8"  fill="#EAF6FF"/>
+    <rect x="251" y="23" width="7" height="11" fill="#EAF6FF"/>
+    <rect x="262" y="20" width="7" height="14" fill="#EAF6FF"/>
+    <rect x="273" y="17" width="7" height="17" fill="#EAF6FF"/>
+  </g>
+  <!-- 模式圆点：实心 = 当前模式（1=Presenter） -->
+  <g stroke="#EAF6FF" stroke-width="1.5">
+    <circle cx="326" cy="28" r="6" fill="#EAF6FF"/>
+    <circle cx="348" cy="28" r="6" fill="none" opacity="0.55"/>
+    <circle cx="370" cy="28" r="6" fill="none" opacity="0.55"/>
+  </g>
+</svg>

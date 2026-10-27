@@ -16,7 +16,7 @@
  *          若模块无板载上拉：SDA/SCL 各接 4.7kΩ 到 3.3V
  *          若模块有 PS 跳线且断开：VL 脚单独接 3.3V
  *    蜂鸣器 I/O->GPIO5  VCC->3.3V  GND->GND（无源，PWM驱动）
- *    BOOT键：GPIO0 内部上拉，按下=LOW（板载BOOT键即可）
+*    BOOT键：GPIO0 内部上拉，按下=LOW（板载BOOT键即可       ）
  *
  *  上电后串口(115200)会打印 I2C 扫描结果：
  *    应看到 0x3C(OLED) 和 0x73(PAJ7620U2)
@@ -49,16 +49,16 @@ static constexpr uint8_t BUZZER_RES = 8;
 static unsigned long beepEndMs = 0;
 
 // PAJ7620U2 手势判定参数；可调整进入/退出判定时间以适配手势速度与误触情况。
-static constexpr unsigned long PAJ_GESTURE_ENTRY_TIME_MS = 200;
-static constexpr unsigned long PAJ_GESTURE_EXIT_TIME_MS = 500;
+static constexpr unsigned long PAJ_GESTURE_ENTRY_TIME_MS = 100;
+static constexpr unsigned long PAJ_GESTURE_EXIT_TIME_MS = 300;
 // 两次手势读取之间的最短间隔，用于抑制传感器对同一动作的重复报告。
-static constexpr unsigned long GESTURE_COOLDOWN_MS = 350;
+static constexpr unsigned long GESTURE_COOLDOWN_MS = 250;
 // 可调节各动作的重复次数；演示模式音量/媒体方向键默认 3 次，浏览滚轮/媒体音量默认 5 次。
 static constexpr uint8_t PRESENTER_VOLUME_REPEAT_COUNT = 3;
 static constexpr uint8_t BROWSER_SCROLL_REPEAT_COUNT = 5;
 static constexpr uint8_t MEDIA_VOLUME_REPEAT_COUNT = 5;
 static constexpr uint8_t MEDIA_SEEK_REPEAT_COUNT = 3;
-// HID 按下保持时间、重复动作间隔及 BOOT 按键防抖时间（毫秒）。
+    // HID 按下保持时间、重复动作间隔及 BOOT 按键防抖时间（毫秒）。
 static constexpr unsigned long KEY_PRESS_DURATION_MS = 20;
 static constexpr unsigned long CONSUMER_PRESS_DURATION_MS = 30;
 static constexpr unsigned long HID_REPEAT_INTERVAL_MS = 25;

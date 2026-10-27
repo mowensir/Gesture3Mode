@@ -30,7 +30,7 @@
 - 三模式独立映射，覆盖 PPT 演示、网页浏览、媒体控制三大场景
 - Presenter / Browser / Media 三种模式通过 BOOT 按键循环切换，OLED 显示当前模式与最近一次已处理手势
 - 蓝牙信号强度（RSSI）可视化，手势计数与时间统计
-- 手势防抖（350ms 冷却）与连续触发（音量/滚轮 5 次连发）
+- 手势防抖（250ms 冷却）与连续触发（音量/滚轮 5 次连发）
 - 上电自检流程，逐项显示硬件状态
 - 按测试表原始次数计算的平均识别率为 91.1%（5~15cm 范围）
 
@@ -47,28 +47,17 @@
 | OLED 显示屏 | 0.96 寸 128×64, I²C 地址 0x3C | 1 |
 | 蜂鸣器 | 有源或无源（LEDC PWM 4kHz） | 1 |
 | 按键 | 轻触开关（BOOT 键，GPIO0） | 1 |
-| 电阻 | 4.7kΩ 上拉电阻 ×2 | 2 |
 | 电源 | 3.3V 稳压（USB 供电或锂电池） | 1 |
 
 ### 接线图
 
-```
-ESP32-D0WD        PAJ7620U2 / OLED
-GPIO21 (SDA) ──── SDA (共用)
-GPIO22 (SCL) ──── SCL (共用)
-3.3V         ──── VCC
-GND          ──── GND
+![Gesture3Mode 硬件接线图](./elements/circuit.svg)
 
-ESP32-D0WD        蜂鸣器
-GPIO5        ──── 正极（经三极管驱动或直驱）
-GND          ──── 负极
-
-ESP32-D0WD        BOOT 按键
-GPIO0        ──── 按键一端，另一端接地
-```
-
-- I²C 总线需外接 4.7kΩ 上拉至 3.3V
-- PAJ7620U2 默认 I²C 地址为 0x73（AD1 引脚悬空或接 GND）
+- OLED SSD1306 与 PAJ7620U2 共用 I²C：SDA 接 GPIO21，SCL 接 GPIO22；地址分别为 0x3C 和 0x73。
+- 两个模块均接 3.3V 和公共 GND。PAJ7620U2 默认 I²C 地址为 0x73（AD1 引脚悬空或接 GND）。
+- 无源蜂鸣器模块的 I/O 接 GPIO5，VCC 接 3.3V，GND 接公共地；GPIO5 输出 4kHz PWM。裸蜂鸣器应按器件规格确认 GPIO 驱动能力，必要时加三极管驱动。
+- 使用开发板板载 BOOT 键（GPIO0，内部上拉，按下为 LOW），无需额外接按键。
+- 若模块没有板载上拉，SDA、SCL 各接 4.7kΩ 至 3.3V；PAJ7620U2 的 PS 跳线断开时，VL 脚单独接 3.3V。
 
 ---
 
@@ -76,14 +65,14 @@ GPIO0        ──── 按键一端，另一端接地
 
 - **开发环境**：Arduino IDE 2.x / PlatformIO
 - **ESP32 支持包**：esp32 by Espressif Systems (≥ 2.0.14)
-- **手势库**：[RevEng_PAJ7620](https://github.com/RevEng-Community/RevEng_PAJ7620) @ ^1.5.0
+- **手势库**：[RevEng_PAJ7620](https://github.com/acrandal/RevEng_PAJ7620) @ ^1.5.0
 - **BLE 库**：NimBLE-Arduino 2.x（已集成于 ESP32 支持包，或单独安装）
 - **OLED 库**：Adafruit SSD1306 + Adafruit GFX（或 u8g2）
 
 ### Arduino IDE 库管理器安装
 
 ```
-RevEng_PAJ7620 by RevEng Community  version 1.5.0
+RevEng_PAJ7620 by Aaron S. Crandall  version 1.5.0
 Adafruit SSD1306                     version 2.5.7
 Adafruit GFX Library                 version 1.11.5
 ```
@@ -144,33 +133,17 @@ OLED 屏幕（128×64）实时显示以下信息：
 
 ### 已连接蓝牙（信号良好）
 
-```
-┌──────────────────────────────┐
-│ Gesture 3Mode  ▂▄▆█ ● ○ ○  │
-│ Mode: Presenter              │
-│ Gesture: PageUp              │
-│ BLE: linked  -52dBm          │
-│ Total: 37  Last: 3s          │
-└──────────────────────────────┘
-```
+![OLED 已连接蓝牙](./elements/oled_screen_connected.svg)
 
 ### 未连接蓝牙
 
-```
-┌──────────────────────────────┐
-│ Gesture 3Mode          ○ ● ○ │
-│ Mode: Browser                │
-│ Gesture: ScrollUp            │
-│ BLE: searching               │
-│ Total: 21  Last: 1s ago      │
-└──────────────────────────────┘
-```
+![OLED 未连接蓝牙](./elements/oled_screen_disconnected.svg)
 
 ### 各行含义
 
 | 行号 | 内容 | 说明 |
 |---|---|---|
-| 第 1 行 | 标题 + 信号格 + 模式圆点 | 信号格 4 格，按 RSSI 动态填充（阈值 -50/-65/-80 dBm）；RSSI 尚未读取时显示空格；3 个圆点，实心表示当前模式 |
+| 第 1 行 | 标题 + 信号格 + 模式圆点 | 右侧信号格 4 格，按 RSSI 动态填充（≥-50 dBm → 4 格、≥-65 → 3 格、≥-80 → 2 格、更弱 → 1 格；未连接时 4 格全部空心）；3 个圆点对应三种模式（实心 = 当前模式：1=Presenter, 2=Browser, 3=Media） |
 | 第 2 行 | 模式名称 | Presenter / Browser / Media（对应演示/浏览/媒体） |
 | 第 3 行 | 手势名称 | 持久显示，直到新手势到来 |
 | 第 4 行 | 蓝牙状态 + RSSI | linked / searching + dBm 数值 |
@@ -244,9 +217,9 @@ BLE 初始化失败时，OLED（若可用）和串口会报告 `BLE: FAIL!`；�
 
 ### 手势防抖与连续触发
 
-识别到手势后设置 350 ms 冷却时间，避免传感器对同一动作连续报告造成重复触发；该冷却与最近手势时间统计分别计时。
+传感器返回有效手势后，主循环启动 250 ms 冷却，在此期间暂停读取手势，以避免同一动作重复触发。冷却会影响紧接着开始的下一次手势；它不属于当前手势从开始到首次响应的处理时间。若下一次手势在冷却期间开始，其识别会被推迟，具体延迟取决于手势开始时刻及传感器判定过程。
 
-PAJ7620 手势进入时间为 200 ms，退出时间为 500 ms，手势识别冷却时间为 350 ms；对应常量为 `PAJ_GESTURE_ENTRY_TIME_MS`、`PAJ_GESTURE_EXIT_TIME_MS` 和 `GESTURE_COOLDOWN_MS`。
+代码将 `PAJ_GESTURE_ENTRY_TIME_MS`（100 ms）和 `PAJ_GESTURE_EXIT_TIME_MS`（300 ms）传给 RevEng_PAJ7620 库。库会在部分方向/前后手势判定分支中调用 `delay()`，间隔读取或确认手势；这些是库的判定等待，不是 PAJ7620 固件内部的防抖参数。具体等待是否发生以及对响应的影响取决于识别到的手势分支，应结合实测判断。
 
 演示模式音量重复次数由 `PRESENTER_VOLUME_REPEAT_COUNT` 控制（默认 3 次）；浏览滚轮、媒体音量和媒体快进/快退方向键次数分别由 `BROWSER_SCROLL_REPEAT_COUNT`、`MEDIA_VOLUME_REPEAT_COUNT` 和 `MEDIA_SEEK_REPEAT_COUNT` 控制（分别默认为 5、5、3 次）。调整这些常量即可改变对应操作次数，无需修改映射逻辑。Consumer 报告每次按下保持 30 ms 后释放，重复间隔另为 25 ms。
 
@@ -284,12 +257,16 @@ PAJ7620 手势进入时间为 200 ms，退出时间为 500 ms，手势识别冷�
 
 ### 响应延迟
 
-| 指标 | 数值 |
-|---|---|
-| 手势识别到 HID 发送 | ≤ 50 ms |
-| 手势防抖冷却 | 350 ms |
-| 重复动作释放后间隔 | 25 ms |
-| RSSI 更新周期 | 2 s |
+| 指标 | 当前配置或测量状态 | 说明 |
+|---|---|---|
+| 手势开始到首次 HID 响应（端到端） | 未实测 | 受手势识别过程、部分分支中的库内等待、主循环处理、BLE 通知传输及主机调度影响；库内等待并非每种手势都会发生。 |
+| Entry 延时 | 100 ms | 传给 RevEng_PAJ7620 库；在部分方向手势的前后手势消歧分支中，库会等待后再读取一次传感器。 |
+| Exit 延时 | 300 ms | 传给库；在前后手势相关分支中，库会等待后才返回结果，因此会影响这些分支的处理时间。 |
+| 手势读取冷却 | 250 ms | `readGesture()` 返回有效手势后，主循环至少等待 250 ms 才再次读取；影响后续手势读取，不是当前手势开始至首次响应的固定延时。 |
+| 重复动作释放后间隔 | 25 ms | 连续发送多次按键或 Consumer 操作时，相邻操作之间的间隔。 |
+| RSSI 更新周期 | 2 s | 状态显示更新周期，与手势响应无关。 |
+
+代码未对识别到手势至 HID 通知、或动作开始至主机收到 HID 报告的耗时进行计时，因此不提供“识别到 HID 发送 ≤ 50 ms”的实测结论。若需报告端到端响应时间，应明确计时起点和终点，并在设备与主机上实测；库中的分支等待和主循环冷却不能视为适用于每个手势的统一延迟。
 
 ---
 
@@ -356,8 +333,8 @@ PAJ7620 手势进入时间为 200 ms，退出时间为 500 ms，手势识别冷�
 ### 参考文献
 
 - PAJ7620U2 数据手册
-- [RevEng_PAJ7620 库文档](https://github.com/RevEng-Community/RevEng_PAJ7620)
-- [NimBLE-Arduino 示例](htstps://github.com/h2zero/NimBLE-Arduino)
+- [RevEng_PAJ7620 库文档](https://github.com/acrandal/RevEng_PAJ7620)
+- [NimBLE-Arduino 示例](https://github.com/h2zero/NimBLE-Arduino)
 - ESP32 技术参考手册
 
 ### 许可
@@ -366,6 +343,6 @@ PAJ7620 手势进入时间为 200 ms，退出时间为 500 ms，手势识别冷�
 
 ---
 
-**作者**：mociyun19997
+**作者**：mociyun
 **日期**：2026-10-14
-**仓库地址**：https://github.com/mociyun19997/Gesture3Mode
+**仓库地址**：https://github.com/mociyun1997/Gesture_3Mode

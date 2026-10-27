@@ -1,0 +1,362 @@
+<mxfile host="WorkBuddy" modified="2026-10-25T15:08:00+08:00" agent="WorkBuddy" version="24.0.0" type="device">
+  <diagram id="ble-hid-mindmap" name="蓝牙 HID 工作原理思维导图">
+    <mxGraphModel dx="1600" dy="1000" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1620" pageHeight="1020" math="0" shadow="0" background="#ffffff">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ===== 标题 ===== -->
+        <mxCell id="mm_title" value="蓝牙 BLE HID 工作原理 · 思维导图（基于 src/main.cpp）" style="text;html=1;fontSize=20;fontStyle=1;fontColor=#1A1A1A;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="12" width="700" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="mm_sub" value="①~④ 讲“怎么连、怎么发”（右侧） · ⑤~⑧ 讲“发什么、怎么封装”（左侧） · 等宽字体 = main.cpp 关键代码" style="text;html=1;fontSize=12;fontColor=#666666;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="44" width="900" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 中心节点 ===== -->
+        <mxCell id="ctr" value="" style="rounded=1;arcSize=12;fillColor=#1E4FA3;strokeColor=#12336B;strokeWidth=2.5;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="690" y="430" width="220" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="ctr_main" value="蓝牙 BLE HID&#10;工作原理" style="text;html=1;fontSize=17;fontStyle=1;fontColor=#FFFFFF;align=center;verticalAlign=middle;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="690" y="444" width="220" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="ctr_sub" value="Gesture 3Mode&#10;NimBLE 复合 HID 从机&#10;Peripheral ←→ Central 主机" style="text;html=1;fontSize=10;fontColor=#D6E4FF;align=center;verticalAlign=middle;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="690" y="498" width="220" height="44" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 中心 → 各分支 连线 ===== -->
+        <mxCell id="e_r1" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#1C4299;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="910" y="490" as="sourcePoint" />
+            <mxPoint x="950" y="153" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_r2" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#00614D;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="910" y="490" as="sourcePoint" />
+            <mxPoint x="950" y="400" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_r3" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#994000;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="910" y="490" as="sourcePoint" />
+            <mxPoint x="950" y="620" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_r4" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#52229E;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="910" y="490" as="sourcePoint" />
+            <mxPoint x="950" y="835" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_l1" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#0F5132;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="690" y="490" as="sourcePoint" />
+            <mxPoint x="660" y="162" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_l2" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#085A68;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="690" y="490" as="sourcePoint" />
+            <mxPoint x="660" y="422" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_l3" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#7A5B00;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="690" y="490" as="sourcePoint" />
+            <mxPoint x="660" y="627" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_l4" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#7E2C55;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="690" y="490" as="sourcePoint" />
+            <mxPoint x="660" y="840" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ===== R1 广播 ===== -->
+        <mxCell id="r1_hdr" value="① 广播 Advertising" style="rounded=1;arcSize=40;fillColor=#2E6BE6;strokeColor=#1C4299;strokeWidth=2;fontSize=13;fontStyle=1;fontColor=#FFFFFF;html=1;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="950" y="130" width="190" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="e_r1c" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#1C4299;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1140" y="153" as="sourcePoint" />
+            <mxPoint x="1180" y="153" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r1_card" value="" style="rounded=1;arcSize=8;fillColor=#F3F7FE;strokeColor=#9DB9F0;strokeWidth=1.5;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="70" width="390" height="165" as="geometry" />
+        </mxCell>
+        <mxCell id="r1_t" value="让主机发现我：外设周期性“喊话”" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#1C4299;align=left;verticalAlign=middle;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="78" width="390" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="r1_c1" value="NimBLEDevice::init(&quot;Gesture 3Mode&quot;);" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="100" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="r1_c2" value="adv-&gt;setName(&quot;Gesture 3Mode&quot;);  // 设备名" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="116" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="r1_c3" value="adv-&gt;setAppearance(0x03C1); // HID 外观码" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="132" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="r1_c4" value="adv-&gt;addServiceUUID(HID 服务);" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="148" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="r1_c5" value="adv-&gt;start();               // 开始广播" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="164" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="r1_n" value="0x03C1 = 人机接口设备外观码，主机搜索列表里显示键盘/鼠标图标；断开后 advertiseOnDisconnect(true) 自动重新广播，等待主机重连。" style="text;html=1;fontSize=10;fontColor=#555555;align=left;verticalAlign=middle;spacingLeft=12;spacingRight=10;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="182" width="390" height="46" as="geometry" />
+        </mxCell>
+
+        <!-- ===== R2 GATT ===== -->
+        <mxCell id="r2_hdr" value="② GATT 服务结构" style="rounded=1;arcSize=40;fillColor=#00997A;strokeColor=#00614D;strokeWidth=2;fontSize=13;fontStyle=1;fontColor=#FFFFFF;html=1;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="950" y="377" width="190" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="e_r2c" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#00614D;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1140" y="400" as="sourcePoint" />
+            <mxPoint x="1180" y="400" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r2_card" value="" style="rounded=1;arcSize=8;fillColor=#EFF9F6;strokeColor=#8FD4C6;strokeWidth=1.5;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="300" width="390" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="r2_t" value="每个 Report ID = 一条独立“信箱”（特征）" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#00614D;align=left;verticalAlign=middle;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="308" width="390" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="r2_c1" value="keyboardInputReport    // 键盘信箱 =" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="330" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="r2_c2" value="  hidDevice-&gt;getInputReport(1);  // ID=1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="346" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="r2_c3" value="mouseInputReport       // 鼠标信箱 =" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="362" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="r2_c4" value="  hidDevice-&gt;getInputReport(2);  // ID=2" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="378" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="r2_c5" value="consumerControl... // 媒体信箱 getInputReport(3);" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="394" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="r2_n" value="sendKey() 投进 ID1 信箱 → 主机当键盘按键处理；sendMouse() 投进 ID2 信箱 → 当鼠标位移处理。信箱互不混用，主机不用猜“这包数据是谁的”——这就是一个蓝牙同时当键盘 + 鼠标 + 遥控器的实现方式。Report Map（⑤）提前告诉主机每个信箱的数据格式。" style="text;html=1;fontSize=10;fontColor=#555555;align=left;verticalAlign=middle;spacingLeft=12;spacingRight=10;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="412" width="390" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- ===== R3 notify ===== -->
+        <mxCell id="r3_hdr" value="③ notify 数据推送" style="rounded=1;arcSize=40;fillColor=#E66600;strokeColor=#994000;strokeWidth=2;fontSize=13;fontStyle=1;fontColor=#FFFFFF;html=1;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="950" y="597" width="190" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="e_r3c" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#994000;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1140" y="620" as="sourcePoint" />
+            <mxPoint x="1180" y="620" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r3_card" value="" style="rounded=1;arcSize=8;fillColor=#FFF6EE;strokeColor=#F0B98A;strokeWidth=1.5;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="530" width="390" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="r3_t" value="Notification：从机主动推，主机免轮询" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#994000;align=left;verticalAlign=middle;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="538" width="390" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="r3_c1" value="uint8_t r[8] = {mod, 0, key, 0,0,0,0,0};" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="560" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="r3_c2" value="keyboardInputReport-&gt;setValue(r, 8);" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="576" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="r3_c3" value="keyboardInputReport-&gt;notify();   // 推送" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="592" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="r3_c4" value="delay(KEY_PRESS_DURATION_MS);  // 20ms" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="608" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="r3_c5" value="keyboardInputReport-&gt;setValue(n, 8); // 全0" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="624" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="r3_c6" value="keyboardInputReport-&gt;notify();   // 释放" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="640" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="r3_n" value="按下 + 释放成对发送，主机才知道“按键结束了”；notify 由从机主动推送、无需主机应答，延迟低又省电。" style="text;html=1;fontSize=10;fontColor=#555555;align=left;verticalAlign=middle;spacingLeft=12;spacingRight=10;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="658" width="390" height="46" as="geometry" />
+        </mxCell>
+
+        <!-- ===== R4 连接与 RSSI ===== -->
+        <mxCell id="r4_hdr" value="④ 连接与 RSSI" style="rounded=1;arcSize=40;fillColor=#7A3FE6;strokeColor=#52229E;strokeWidth=2;fontSize=13;fontStyle=1;fontColor=#FFFFFF;html=1;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="950" y="812" width="190" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="e_r4c" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#52229E;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1140" y="835" as="sourcePoint" />
+            <mxPoint x="1180" y="835" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r4_card" value="" style="rounded=1;arcSize=8;fillColor=#F7F2FD;strokeColor=#C7ADF2;strokeWidth=1.5;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="760" width="390" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="r4_t" value="连接状态回调与信号强度" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#52229E;align=left;verticalAlign=middle;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="768" width="390" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="r4_c1" value="onConnect()    → deviceConnected = true;" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="790" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="r4_c2" value="onDisconnect() → false + 自动重广播" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="806" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="r4_c3" value="ble_gap_conn_rssi(handle, &amp;rssi);" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="822" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="r4_n" value="RSSI 为负数、越接近 0 信号越强：≥-50 → 4 格、≥-65 → 3 格、≥-80 → 2 格，画成 OLED 右上角信号条；每 2 秒刷新一次（STATUS_REFRESH_INTERVAL_MS）。" style="text;html=1;fontSize=10;fontColor=#555555;align=left;verticalAlign=middle;spacingLeft=12;spacingRight=10;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="840" width="390" height="62" as="geometry" />
+        </mxCell>
+
+        <!-- ===== L1 复合 HID 描述符 ===== -->
+        <mxCell id="l1_hdr" value="⑤ 复合 HID 描述符" style="rounded=1;arcSize=40;fillColor=#1E9E6E;strokeColor=#0F5132;strokeWidth=2;fontSize=13;fontStyle=1;fontColor=#FFFFFF;html=1;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="157" width="190" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="e_l1c" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#0F5132;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="470" y="180" as="sourcePoint" />
+            <mxPoint x="430" y="180" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="l1_card" value="" style="rounded=1;arcSize=8;fillColor=#EFF8F3;strokeColor=#96D3B8;strokeWidth=1.5;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="70" width="390" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="l1_t" value="REPORT_MAP 逐字节解读：数据长什么样？" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#0F5132;align=left;verticalAlign=middle;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="78" width="390" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="l1_c1" value="0x85, 1  // Report ID 1 → 键盘" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="100" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l1_c2" value="  {修饰键, 0, 键1..键6}  共 8 字节" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="116" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l1_c3" value="  例: {0,0,0x4B,0,0,0,0,0} = PageUp" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="132" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l1_c4" value="0x85, 2  // Report ID 2 → 鼠标" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="148" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l1_c5" value="  {按钮位, X位移, Y位移, 滚轮} 4字节" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="164" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l1_c6" value="  例: {0,10,0,1} = 右移10 + 滚轮上滚1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="180" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l1_c7" value="0x85, 3  // Report ID 3 → 媒体键" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="196" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l1_c8" value="  {0xE9, 0} 2字节usage = 音量+" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="212" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l1_n" value="主机收到数据时看它来自哪条特征（ID 1/2/3），再按 Report Map 约定的格式解析：同样是几个字节，ID1 解读成“按了 PageUp”，ID2 解读成“鼠标动了多少”——互不混淆。这就是描述符 0x85（Report ID 标签）的作用。" style="text;html=1;fontSize=10;fontColor=#555555;align=left;verticalAlign=middle;spacingLeft=12;spacingRight=10;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="230" width="390" height="56" as="geometry" />
+        </mxCell>
+
+        <!-- ===== L2 动作发送函数 ===== -->
+        <mxCell id="l2_hdr" value="⑥ 动作发送函数" style="rounded=1;arcSize=40;fillColor=#0E8FA3;strokeColor=#085A68;strokeWidth=2;fontSize=13;fontStyle=1;fontColor=#FFFFFF;html=1;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="399" width="190" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="e_l2c" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#085A68;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="470" y="422" as="sourcePoint" />
+            <mxPoint x="430" y="422" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="l2_card" value="" style="rounded=1;arcSize=8;fillColor=#EEF8FA;strokeColor=#8FD0DA;strokeWidth=1.5;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="340" width="390" height="165" as="geometry" />
+        </mxCell>
+        <mxCell id="l2_t" value="统一封装，模式映射只管调用" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#085A68;align=left;verticalAlign=middle;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="348" width="390" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="l2_c1" value="sendKey(mod, key);             // 键盘" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="370" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l2_c2" value="sendMouse(dx, dy, wheel, btn); // 鼠标" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="386" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l2_c3" value="sendConsumer(usage);           // 媒体键" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="402" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l2_c4" value="repeatConsumer(0x00E9, 3);     // 音量+ x3" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="418" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l2_c5" value="repeatWheel(1, 5);             // 滚轮 x5" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="434" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l2_n" value="重复动作间隔 HID_REPEAT_INTERVAL_MS = 25ms；所有发送函数都先检查 deviceConnected，未连接就静默跳过，不会报错。" style="text;html=1;fontSize=10;fontColor=#555555;align=left;verticalAlign=middle;spacingLeft=12;spacingRight=10;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="452" width="390" height="46" as="geometry" />
+        </mxCell>
+
+        <!-- ===== L3 安全与配对 ===== -->
+        <mxCell id="l3_hdr" value="⑦ 安全与配对" style="rounded=1;arcSize=40;fillColor=#D9A400;strokeColor=#7A5B00;strokeWidth=2;fontSize=13;fontStyle=1;fontColor=#FFFFFF;html=1;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="604" width="190" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="e_l3c" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#7A5B00;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="470" y="627" as="sourcePoint" />
+            <mxPoint x="430" y="627" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="l3_card" value="" style="rounded=1;arcSize=8;fillColor=#FDF9EC;strokeColor=#E5D08A;strokeWidth=1.5;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="560" width="390" height="135" as="geometry" />
+        </mxCell>
+        <mxCell id="l3_t" value="配对一次，重连免操作" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#7A5B00;align=left;verticalAlign=middle;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="568" width="390" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="l3_c1" value="NimBLEDevice::setSecurityAuth(" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="590" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l3_c2" value="    true, false, false);" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="606" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l3_n" value="三个参数依次 = Bonding(配对绑定)、MITM(防中间人)、LE Secure Connections。本项目要求绑定、不强制 MITM/LESC，教学设备够用；配对后主机记住设备，之后重连自动完成。" style="text;html=1;fontSize=10;fontColor=#555555;align=left;verticalAlign=middle;spacingLeft=12;spacingRight=10;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="624" width="390" height="62" as="geometry" />
+        </mxCell>
+
+        <!-- ===== L4 完整旅程 ===== -->
+        <mxCell id="l4_hdr" value="⑧ 手势的完整旅程" style="rounded=1;arcSize=40;fillColor=#B5487E;strokeColor=#7E2C55;strokeWidth=2;fontSize=13;fontStyle=1;fontColor=#FFFFFF;html=1;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="817" width="190" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="e_l4c" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#7E2C55;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="470" y="840" as="sourcePoint" />
+            <mxPoint x="430" y="840" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="l4_card" value="" style="rounded=1;arcSize=8;fillColor=#FBF0F5;strokeColor=#E4A9C6;strokeWidth=1.5;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="745" width="390" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="l4_t" value="把①~⑦串起来：一次挥手发生了什么" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#7E2C55;align=left;verticalAlign=middle;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="753" width="390" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="l4_c1" value="paj.readGesture()        // 读取手势" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="775" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l4_c2" value=" → doGesture(g)          // 按模式查映射" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="791" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l4_c3" value=" → sendKey(0x4B)         // 例: PageUp" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="807" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l4_c4" value=" → setValue + notify()   // 无线推送" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="823" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l4_c5" value=" → 主机执行动作" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="839" width="390" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="l4_n" value="例：Media 模式上滑 = repeatConsumer(0x00E9, 5) → 音量+ ×5；挥手 = 0x00E2 静音；手势冷却 GESTURE_COOLDOWN_MS = 250ms 防止同一动作重复触发。" style="text;html=1;fontSize=10;fontColor=#555555;align=left;verticalAlign=middle;spacingLeft=12;spacingRight=10;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="857" width="390" height="62" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 底部说明 ===== -->
+        <mxCell id="mm_foot" value="代码摘自 src/main.cpp（NimBLE-Arduino 库）· 本图与电路图（circuit.drawio / circuit_internal.drawio）相互独立，可分开导出使用" style="text;html=1;fontSize=11;fontColor=#888888;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="955" width="1200" height="24" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

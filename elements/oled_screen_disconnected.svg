@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="background: #ffffff; color-scheme: light;" width="384" height="192" viewBox="0 0 384 192">
+  <rect x="0" y="0" width="384" height="192" fill="#ffffff"/>
+  <!-- 128x64 OLED 屏幕 · 未连接蓝牙 · 3x 放大 -->
+  <rect x="3" y="3" width="378" height="186" rx="12" fill="#0A0A0A" stroke="#3A3F44" stroke-width="3"/>
+  <g font-family="Consolas, 'Courier New', monospace" font-size="17" fill="#EAF6FF">
+    <text x="16" y="35">Gesture 3Mode</text>
+    <text x="16" y="73">Mode: Browser</text>
+    <text x="16" y="103">Gesture: ScrollUp</text>
+    <text x="16" y="133">BLE: searching</text>
+    <text x="16" y="163">Total:21  Last:1s</text>
+  </g>
+  <!-- RSSI 信号条：搜索中，4 格全部空心 -->
+  <g stroke="#EAF6FF" stroke-width="1.5">
+    <rect x="240" y="26" width="7" height="8"  fill="none" opacity="0.35"/>
+    <rect x="251" y="23" width="7" height="11" fill="none" opacity="0.35"/>
+    <rect x="262" y="20" width="7" height="14" fill="none" opacity="0.35"/>
+    <rect x="273" y="17" width="7" height="17" fill="none" opacity="0.35"/>
+  </g>
+  <!-- 模式圆点：实心 = 当前模式（2=Browser） -->
+  <g stroke="#EAF6FF" stroke-width="1.5">
+    <circle cx="326" cy="28" r="6" fill="none" opacity="0.55"/>
+    <circle cx="348" cy="28" r="6" fill="#EAF6FF"/>
+    <circle cx="370" cy="28" r="6" fill="none" opacity="0.55"/>
+  </g>
+</svg>

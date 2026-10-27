@@ -1,0 +1,543 @@
+<mxfile host="WorkBuddy" modified="2026-10-25T13:28:00+08:00" agent="WorkBuddy" version="24.0.0" type="device">
+  <diagram id="gesture3mode-wiring-v2" name="Gesture3Mode 接线图">
+    <mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="880" math="0" shadow="0" background="#ffffff">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ===== 标题 ===== -->
+        <mxCell id="title" value="Gesture 3Mode · 硬件接线图" style="text;html=1;fontSize=24;fontStyle=1;fontColor=#1A1A1A;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="16" width="700" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="ESP32-D0WD 经典 ESP32 · I²C 总线（GPIO21 SDA / GPIO22 SCL）并联 OLED 与 PAJ7620U2 · 实心圆点 = 电气节点" style="text;html=1;fontSize=13;fontColor=#666666;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="54" width="900" height="24" as="geometry" />
+        </mxCell>
+
+        <!-- ===== OLED 显示屏模块（左上） ===== -->
+        <mxCell id="oled" value="" style="rounded=1;arcSize=8;fillColor=#FFFFFF;strokeColor=#52647A;strokeWidth=2;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="230" width="300" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="oled_title" value="OLED 显示屏" style="text;html=1;fontSize=15;fontStyle=1;fontColor=#1A1A1A;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="50" y="242" width="180" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="oled_sub" value="SSD1306 · 0.96寸 128×64&#10;I²C 地址 0x3C" style="text;html=1;fontSize=11;fontColor=#666666;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="230" y="240" width="100" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="oled_vcc" value="VCC" style="rounded=1;arcSize=25;fillColor=#FFF6DF;strokeColor=#D9A400;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#7A5B00;html=1;" vertex="1" parent="1">
+          <mxGeometry x="248" y="270" width="70" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="oled_gnd" value="GND" style="rounded=1;arcSize=25;fillColor=#F0F0F0;strokeColor=#777777;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#444444;html=1;" vertex="1" parent="1">
+          <mxGeometry x="248" y="310" width="70" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="oled_sda" value="SDA" style="rounded=1;arcSize=25;fillColor=#E2F6F1;strokeColor=#00997A;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#00614D;html=1;" vertex="1" parent="1">
+          <mxGeometry x="248" y="350" width="70" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="oled_scl" value="SCL" style="rounded=1;arcSize=25;fillColor=#E4EDFB;strokeColor=#2E6BE6;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#1C4299;html=1;" vertex="1" parent="1">
+          <mxGeometry x="248" y="390" width="70" height="26" as="geometry" />
+        </mxCell>
+
+        <!-- ===== PAJ7620U2 手势传感器模块（左下） ===== -->
+        <mxCell id="paj" value="" style="rounded=1;arcSize=8;fillColor=#FFFFFF;strokeColor=#52647A;strokeWidth=2;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="520" width="300" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="paj_title" value="手势传感器" style="text;html=1;fontSize=15;fontStyle=1;fontColor=#1A1A1A;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="50" y="532" width="180" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="paj_sub" value="PAJ7620U2&#10;I²C 地址 0x73" style="text;html=1;fontSize=11;fontColor=#666666;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="230" y="530" width="100" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="paj_vcc" value="VCC" style="rounded=1;arcSize=25;fillColor=#FFF6DF;strokeColor=#D9A400;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#7A5B00;html=1;" vertex="1" parent="1">
+          <mxGeometry x="248" y="560" width="70" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="paj_gnd" value="GND" style="rounded=1;arcSize=25;fillColor=#F0F0F0;strokeColor=#777777;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#444444;html=1;" vertex="1" parent="1">
+          <mxGeometry x="248" y="600" width="70" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="paj_sda" value="SDA" style="rounded=1;arcSize=25;fillColor=#E2F6F1;strokeColor=#00997A;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#00614D;html=1;" vertex="1" parent="1">
+          <mxGeometry x="248" y="640" width="70" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="paj_scl" value="SCL" style="rounded=1;arcSize=25;fillColor=#E4EDFB;strokeColor=#2E6BE6;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#1C4299;html=1;" vertex="1" parent="1">
+          <mxGeometry x="248" y="680" width="70" height="26" as="geometry" />
+        </mxCell>
+
+        <!-- ===== ESP32 主控板（中央） ===== -->
+        <mxCell id="esp32" value="" style="rounded=1;arcSize=6;fillColor=#E8F5EE;strokeColor=#1E9E6E;strokeWidth=3;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="520" y="240" width="280" height="480" as="geometry" />
+        </mxCell>
+        <mxCell id="esp_title" value="ESP32-D0WD" style="text;html=1;fontSize=18;fontStyle=1;fontColor=#0F5132;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="530" y="256" width="260" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="esp_sub" value="经典 ESP32 · 4MB Flash" style="text;html=1;fontSize=12;fontColor=#3A6B55;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="530" y="284" width="260" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="esp_21" value="GPIO21" style="rounded=1;arcSize=25;fillColor=#E2F6F1;strokeColor=#00997A;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#00614D;html=1;" vertex="1" parent="1">
+          <mxGeometry x="524" y="400" width="90" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="esp_22" value="GPIO22" style="rounded=1;arcSize=25;fillColor=#E4EDFB;strokeColor=#2E6BE6;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#1C4299;html=1;" vertex="1" parent="1">
+          <mxGeometry x="524" y="450" width="90" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="esp_3v3_l" value="3V3" style="rounded=1;arcSize=25;fillColor=#FFF6DF;strokeColor=#D9A400;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#7A5B00;html=1;" vertex="1" parent="1">
+          <mxGeometry x="524" y="500" width="90" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="esp_gnd_l" value="GND" style="rounded=1;arcSize=25;fillColor=#F0F0F0;strokeColor=#777777;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#444444;html=1;" vertex="1" parent="1">
+          <mxGeometry x="524" y="550" width="90" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="esp_3v3_r" value="3V3" style="rounded=1;arcSize=25;fillColor=#FFF6DF;strokeColor=#D9A400;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#7A5B00;html=1;" vertex="1" parent="1">
+          <mxGeometry x="686" y="300" width="90" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="esp_gnd_r" value="GND" style="rounded=1;arcSize=25;fillColor=#F0F0F0;strokeColor=#777777;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#444444;html=1;" vertex="1" parent="1">
+          <mxGeometry x="686" y="350" width="90" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="esp_5" value="GPIO5" style="rounded=1;arcSize=25;fillColor=#FDEBDD;strokeColor=#E66600;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#994000;html=1;" vertex="1" parent="1">
+          <mxGeometry x="686" y="410" width="90" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="esp_0" value="GPIO0" style="rounded=1;arcSize=25;fillColor=#EFE7FA;strokeColor=#7A3FE6;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#52229E;html=1;" vertex="1" parent="1">
+          <mxGeometry x="686" y="560" width="90" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="esp_tag_5" value="PWM · 4kHz" style="text;html=1;fontSize=10;fontColor=#994000;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="686" y="438" width="90" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="esp_tag_0" value="BOOT · 内部上拉" style="text;html=1;fontSize=10;fontColor=#52229E;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="686" y="588" width="90" height="16" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 干线网络标签 ===== -->
+        <mxCell id="lane_3v3" value="3.3V" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#A87D00;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="330" y="256" width="40" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="lane_gnd" value="GND" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#555555;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="360" y="296" width="40" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="lane_sda" value="SDA" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#00614D;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="390" y="336" width="40" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="lane_scl" value="SCL" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#1C4299;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="420" y="376" width="40" height="16" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 3.3V 干线（琥珀） x=350，节点 y=283/513/573 ===== -->
+        <mxCell id="bus_3v3" value="" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2.5;strokeColor=#D9A400;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="320" y="283" as="sourcePoint" />
+            <mxPoint x="320" y="573" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="350" y="283" />
+              <mxPoint x="350" y="573" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bus_3v3_esp" value="" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2.5;strokeColor=#D9A400;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="350" y="513" as="sourcePoint" />
+            <mxPoint x="524" y="513" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="dot_3v3_oled" value="" style="ellipse;fillColor=#D9A400;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="346" y="279" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="dot_3v3_esp" value="" style="ellipse;fillColor=#D9A400;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="346" y="509" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="dot_3v3_paj" value="" style="ellipse;fillColor=#D9A400;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="346" y="569" width="8" height="8" as="geometry" />
+        </mxCell>
+
+        <!-- ===== GND 干线（灰） x=380，节点 y=323/563/613 ===== -->
+        <mxCell id="bus_gnd" value="" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2.5;strokeColor=#777777;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="320" y="323" as="sourcePoint" />
+            <mxPoint x="320" y="613" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="380" y="323" />
+              <mxPoint x="380" y="613" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bus_gnd_esp" value="" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2.5;strokeColor=#777777;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="380" y="563" as="sourcePoint" />
+            <mxPoint x="524" y="563" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="dot_gnd_oled" value="" style="ellipse;fillColor=#777777;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="376" y="319" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="dot_gnd_esp" value="" style="ellipse;fillColor=#777777;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="376" y="559" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="dot_gnd_paj" value="" style="ellipse;fillColor=#777777;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="376" y="609" width="8" height="8" as="geometry" />
+        </mxCell>
+
+        <!-- ===== SDA 干线（青绿） x=410，节点 y=363/413/653 ===== -->
+        <mxCell id="bus_sda" value="" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2.5;strokeColor=#00997A;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="320" y="363" as="sourcePoint" />
+            <mxPoint x="320" y="653" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="410" y="363" />
+              <mxPoint x="410" y="653" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bus_sda_esp" value="" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2.5;strokeColor=#00997A;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="410" y="413" as="sourcePoint" />
+            <mxPoint x="524" y="413" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="dot_sda_oled" value="" style="ellipse;fillColor=#00997A;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="406" y="359" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="dot_sda_esp" value="" style="ellipse;fillColor=#00997A;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="406" y="409" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="dot_sda_paj" value="" style="ellipse;fillColor=#00997A;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="406" y="649" width="8" height="8" as="geometry" />
+        </mxCell>
+
+        <!-- ===== SCL 干线（蓝） x=440，节点 y=403/463/693 ===== -->
+        <mxCell id="bus_scl" value="" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2.5;strokeColor=#2E6BE6;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="320" y="403" as="sourcePoint" />
+            <mxPoint x="320" y="693" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="440" y="403" />
+              <mxPoint x="440" y="693" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bus_scl_esp" value="" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2.5;strokeColor=#2E6BE6;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="440" y="463" as="sourcePoint" />
+            <mxPoint x="524" y="463" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="dot_scl_oled" value="" style="ellipse;fillColor=#2E6BE6;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="436" y="399" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="dot_scl_esp" value="" style="ellipse;fillColor=#2E6BE6;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="436" y="459" width="8" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="dot_scl_paj" value="" style="ellipse;fillColor=#2E6BE6;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="436" y="689" width="8" height="8" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 无源蜂鸣器模块（右上） ===== -->
+        <mxCell id="buzzer" value="" style="rounded=1;arcSize=8;fillColor=#FFFFFF;strokeColor=#52647A;strokeWidth=2;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="920" y="240" width="250" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="buzzer_title" value="无源蜂鸣器模块" style="text;html=1;fontSize=15;fontStyle=1;fontColor=#1A1A1A;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="930" y="252" width="230" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="buzzer_sub" value="三线接口 · GPIO5 输出 4kHz PWM" style="text;html=1;fontSize=11;fontColor=#666666;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="930" y="276" width="230" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="buz_vcc" value="VCC" style="rounded=1;arcSize=25;fillColor=#FFF6DF;strokeColor=#D9A400;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#7A5B00;html=1;" vertex="1" parent="1">
+          <mxGeometry x="930" y="316" width="70" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="buz_gnd" value="GND" style="rounded=1;arcSize=25;fillColor=#F0F0F0;strokeColor=#777777;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#444444;html=1;" vertex="1" parent="1">
+          <mxGeometry x="930" y="356" width="70" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="buz_io" value="I/O" style="rounded=1;arcSize=25;fillColor=#FDEBDD;strokeColor=#E66600;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#994000;html=1;" vertex="1" parent="1">
+          <mxGeometry x="930" y="396" width="70" height="26" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 右侧接线（ESP32 → 蜂鸣器，各自独立通道不重叠） ===== -->
+        <mxCell id="w_buz_vcc" value="" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2.5;strokeColor=#D9A400;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="776" y="313" as="sourcePoint" />
+            <mxPoint x="930" y="329" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="845" y="313" />
+              <mxPoint x="845" y="329" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="w_buz_gnd" value="" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2.5;strokeColor=#777777;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="776" y="363" as="sourcePoint" />
+            <mxPoint x="930" y="369" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="862" y="363" />
+              <mxPoint x="862" y="369" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="w_buz_io" value="" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2.5;strokeColor=#E66600;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="776" y="423" as="sourcePoint" />
+            <mxPoint x="930" y="409" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="880" y="423" />
+              <mxPoint x="880" y="409" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ===== BOOT 按键（右下，板载虚线） ===== -->
+        <mxCell id="boot" value="" style="rounded=1;arcSize=8;fillColor=#FAF7FF;strokeColor=#7A3FE6;strokeWidth=2;shadow=1;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="920" y="560" width="250" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="boot_title" value="BOOT 按键（板载）" style="text;html=1;fontSize=15;fontStyle=1;fontColor=#52229E;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="930" y="572" width="230" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="boot_desc" value="GPIO0 · 按下为 LOW&#10;启用内部上拉，无需另接外部按键" style="text;html=1;fontSize=12;fontColor=#666666;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="930" y="608" width="230" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="w_boot" value="" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2.5;strokeColor=#7A3FE6;dashed=1;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="776" y="573" as="sourcePoint" />
+            <mxPoint x="920" y="613" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="850" y="573" />
+              <mxPoint x="850" y="613" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ===== 图例 ===== -->
+        <mxCell id="legend_title" value="网络颜色" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#666666;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="748" width="70" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="lg1s" value="" style="rounded=0;fillColor=#D9A400;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="115" y="756" width="10" height="10" as="geometry" />
+        </mxCell>
+        <mxCell id="lg1" value="3.3V 电源" style="text;html=1;fontSize=11;fontColor=#7A5B00;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="131" y="748" width="80" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="lg2s" value="" style="rounded=0;fillColor=#777777;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="225" y="756" width="10" height="10" as="geometry" />
+        </mxCell>
+        <mxCell id="lg2" value="GND 地" style="text;html=1;fontSize=11;fontColor=#444444;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="241" y="748" width="70" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="lg3s" value="" style="rounded=0;fillColor=#00997A;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="325" y="756" width="10" height="10" as="geometry" />
+        </mxCell>
+        <mxCell id="lg3" value="SDA (GPIO21)" style="text;html=1;fontSize=11;fontColor=#00614D;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="341" y="748" width="100" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="lg4s" value="" style="rounded=0;fillColor=#2E6BE6;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="455" y="756" width="10" height="10" as="geometry" />
+        </mxCell>
+        <mxCell id="lg4" value="SCL (GPIO22)" style="text;html=1;fontSize=11;fontColor=#1C4299;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="471" y="748" width="100" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="lg5s" value="" style="rounded=0;fillColor=#E66600;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="585" y="756" width="10" height="10" as="geometry" />
+        </mxCell>
+        <mxCell id="lg5" value="PWM (GPIO5)" style="text;html=1;fontSize=11;fontColor=#994000;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="601" y="748" width="100" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="lg6s" value="" style="rounded=0;fillColor=#7A3FE6;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="715" y="756" width="10" height="10" as="geometry" />
+        </mxCell>
+        <mxCell id="lg6" value="BOOT (GPIO0) 板载虚线" style="text;html=1;fontSize=11;fontColor=#52229E;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="731" y="748" width="160" height="24" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 底部注意事项 ===== -->
+        <mxCell id="note" value="" style="rounded=1;arcSize=10;fillColor=#F5F7FA;strokeColor=#B7C3D2;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="786" width="1130" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="note_text" value="注意：OLED 与 PAJ7620U2 并联共用 SDA / SCL（图中十字交叉处无圆点 = 不相连）。若模块没有板载上拉，SDA、SCL 各接 4.7 kΩ 至 3.3V。PAJ7620U2 的 PS 跳线断开时，VL 脚单独接 3.3V；裸蜂鸣器需按器件规格确认 GPIO 驱动能力，必要时加三极管驱动。" style="text;html=1;fontSize=12;fontColor=#444444;align=left;verticalAlign=middle;spacingLeft=12;spacingRight=12;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="786" width="1130" height="60" as="geometry" />
+        </mxCell>
+        <!-- ===== 就近注释：左上 I²C 库说明 ===== -->
+        <mxCell id="note_i2c_box" value="" style="rounded=1;arcSize=8;fillColor=#F6F8FA;strokeColor=#B7C3D2;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="84" width="400" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="note_i2c_hdr" value="I²C 开发简化 · 用库 API 代替手工时序" style="text;html=1;fontSize=12;fontStyle=1;fontColor=#1A1A1A;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="52" y="90" width="376" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="note_i2c_c1" value="#include &lt;Wire.h&gt;              // I²C 基础库" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="52" y="110" width="376" height="14" as="geometry" />
+        </mxCell>
+        <mxCell id="note_i2c_c2" value="#include &lt;Adafruit_SSD1306.h&gt;  // OLED 驱动" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="52" y="124" width="376" height="14" as="geometry" />
+        </mxCell>
+        <mxCell id="note_i2c_c3" value="#include &lt;RevEng_PAJ7620.h&gt;    // 手势传感器" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="52" y="138" width="376" height="14" as="geometry" />
+        </mxCell>
+        <mxCell id="note_i2c_c4" value="Wire.begin(21, 22);   // SDA=21, SCL=22" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="52" y="152" width="376" height="14" as="geometry" />
+        </mxCell>
+        <mxCell id="note_i2c_txt" value="若仅用 &lt;Arduino.h&gt;：要严格按 I²C 读写规则，手工查找从设备地址、读写寄存器，非常繁琐；这些库已封装协议细节，只需调用相关 API。" style="text;html=1;fontSize=10;fontColor=#555555;align=left;verticalAlign=middle;spacingLeft=8;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="52" y="168" width="376" height="42" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 就近注释：蜂鸣器下方 PWM 说明 ===== -->
+        <mxCell id="note_pwm_box" value="" style="rounded=1;arcSize=8;fillColor=#F6F8FA;strokeColor=#B7C3D2;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="920" y="444" width="260" height="112" as="geometry" />
+        </mxCell>
+        <mxCell id="note_pwm_hdr" value="GPIO5 · PWM 生成与非阻塞蜂鸣" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#994000;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="930" y="450" width="240" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="note_pwm_c1" value="ledcSetup(0, 4000, 8);   // 4kHz, 8位" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="930" y="470" width="240" height="14" as="geometry" />
+        </mxCell>
+        <mxCell id="note_pwm_c2" value="ledcAttachPin(5, 0);     // GPIO5 绑通道" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="930" y="484" width="240" height="14" as="geometry" />
+        </mxCell>
+        <mxCell id="note_pwm_c3" value="ledcWrite(0, 128);  // 50% 占空比发声" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="930" y="498" width="240" height="14" as="geometry" />
+        </mxCell>
+        <mxCell id="note_pwm_c4" value="beepEndMs = millis() + durationMs;" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="930" y="512" width="240" height="14" as="geometry" />
+        </mxCell>
+        <mxCell id="note_pwm_txt" value="loop() 中时间戳轮询：到点 ledcWrite(0, 0) 静音，不阻塞主循环。" style="text;html=1;fontSize=10;fontColor=#555555;align=left;verticalAlign=middle;spacingLeft=8;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="930" y="528" width="240" height="26" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 就近注释：蜂鸣器上方 PWM 波形图 ===== -->
+        <mxCell id="pwm_wave_box" value="" style="rounded=1;arcSize=8;fillColor=#FFF8F1;strokeColor=#E6A26B;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="920" y="80" width="260" height="132" as="geometry" />
+        </mxCell>
+        <mxCell id="pwm_wave_hdr" value="PWM 波形 · 4kHz · 50% 占空比" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#994000;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="930" y="86" width="240" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="wave_guide_hi" value="" style="edgeStyle=none;rounded=0;html=1;strokeWidth=1;strokeColor=#CCCCCC;dashed=1;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="962" y="130" as="sourcePoint" />
+            <mxPoint x="1162" y="130" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="wave_guide_lo" value="" style="edgeStyle=none;rounded=0;html=1;strokeWidth=1;strokeColor=#CCCCCC;dashed=1;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="962" y="165" as="sourcePoint" />
+            <mxPoint x="1162" y="165" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="wave_3v3" value="3.3V" style="text;html=1;fontSize=9;fontColor=#994000;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="926" y="119" width="32" height="12" as="geometry" />
+        </mxCell>
+        <mxCell id="wave_0v" value="0V" style="text;html=1;fontSize=9;fontColor=#555555;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="932" y="158" width="24" height="12" as="geometry" />
+        </mxCell>
+        <mxCell id="wave_sq" value="" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#E66600;endArrow=none;startArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="966" y="165" as="sourcePoint" />
+            <mxPoint x="1162" y="130" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="966" y="130" />
+              <mxPoint x="996" y="130" />
+              <mxPoint x="996" y="165" />
+              <mxPoint x="1026" y="165" />
+              <mxPoint x="1026" y="130" />
+              <mxPoint x="1056" y="130" />
+              <mxPoint x="1056" y="165" />
+              <mxPoint x="1086" y="165" />
+              <mxPoint x="1086" y="130" />
+              <mxPoint x="1116" y="130" />
+              <mxPoint x="1116" y="165" />
+              <mxPoint x="1146" y="165" />
+              <mxPoint x="1146" y="130" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="wave_period" value="T = 250µs" style="edgeStyle=none;rounded=0;html=1;strokeWidth=1;strokeColor=#994000;startArrow=classic;endArrow=classic;fontSize=9;fontColor=#994000;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="966" y="178" as="sourcePoint" />
+            <mxPoint x="1026" y="178" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="wave_txt" value="占空比 50% = 每周期高电平占一半；ledcWrite(0, 0) 恒为低电平 → 静音" style="text;html=1;fontSize=9;fontColor=#555555;align=left;verticalAlign=middle;spacingLeft=8;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="930" y="188" width="240" height="22" as="geometry" />
+        </mxCell>
+
+        <!-- ===== 就近注释：BOOT 键下方说明 ===== -->
+        <mxCell id="note_boot_box" value="" style="rounded=1;arcSize=8;fillColor=#F6F8FA;strokeColor=#B7C3D2;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="920" y="706" width="260" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="note_boot_hdr" value="BOOT 键 · 内部弱上拉 + 30ms 防抖" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#52229E;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="930" y="712" width="240" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="note_boot_c1" value="pinMode(BOOT_PIN, INPUT_PULLUP);" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="930" y="730" width="240" height="14" as="geometry" />
+        </mxCell>
+        <mxCell id="note_boot_c2" value="// BOOT_DEBOUNCE_MS = 30 稳定防抖" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="930" y="744" width="240" height="14" as="geometry" />
+        </mxCell>
+        <mxCell id="note_boot_txt" value="确认按下(LOW) → 循环切换三种模式" style="text;html=1;fontSize=10;fontColor=#555555;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="930" y="758" width="240" height="16" as="geometry" />
+        </mxCell>
+
+                <!-- ===== 模块图标（一目了然） ===== -->
+          <mxCell id="icon_oled_frame" value="" style="rounded=1;arcSize=12;fillColor=#1A1A1A;strokeColor=#000000;shadow=0;" vertex="1" parent="1">
+            <mxGeometry x="68" y="296" width="126" height="94" as="geometry" />
+          </mxCell>
+          <mxCell id="icon_oled_screen" value="" style="rounded=0;fillColor=#0A2E4D;strokeColor=#0A2E4D;" vertex="1" parent="1">
+            <mxGeometry x="77" y="305" width="108" height="68" as="geometry" />
+          </mxCell>
+          <mxCell id="icon_oled_l1" value="" style="rounded=1;arcSize=50;fillColor=#66D9FF;strokeColor=none;" vertex="1" parent="1">
+            <mxGeometry x="86" y="314" width="58" height="9" as="geometry" />
+          </mxCell>
+          <mxCell id="icon_oled_l2" value="" style="rounded=1;arcSize=50;fillColor=#3FB8E8;strokeColor=none;" vertex="1" parent="1">
+            <mxGeometry x="86" y="331" width="90" height="9" as="geometry" />
+          </mxCell>
+          <mxCell id="icon_oled_l3" value="" style="rounded=1;arcSize=50;fillColor=#3FB8E8;strokeColor=none;" vertex="1" parent="1">
+            <mxGeometry x="86" y="348" width="74" height="9" as="geometry" />
+          </mxCell>
+          <mxCell id="icon_oled_btn" value="" style="rounded=1;arcSize=50;fillColor=#2B7FBF;strokeColor=none;" vertex="1" parent="1">
+            <mxGeometry x="86" y="362" width="30" height="7" as="geometry" />
+          </mxCell>
+          <mxCell id="icon_paj_f1" value="" style="rounded=1;arcSize=50;fillColor=#F2C094;strokeColor=#D69A66;" vertex="1" parent="1">
+            <mxGeometry x="86" y="588" width="10" height="26" as="geometry" />
+          </mxCell>
+          <mxCell id="icon_paj_f2" value="" style="rounded=1;arcSize=50;fillColor=#F2C094;strokeColor=#D69A66;" vertex="1" parent="1">
+            <mxGeometry x="99" y="582" width="10" height="32" as="geometry" />
+          </mxCell>
+          <mxCell id="icon_paj_f3" value="" style="rounded=1;arcSize=50;fillColor=#F2C094;strokeColor=#D69A66;" vertex="1" parent="1">
+            <mxGeometry x="112" y="580" width="10" height="34" as="geometry" />
+          </mxCell>
+          <mxCell id="icon_paj_f4" value="" style="rounded=1;arcSize=50;fillColor=#F2C094;strokeColor=#D69A66;" vertex="1" parent="1">
+            <mxGeometry x="125" y="584" width="10" height="30" as="geometry" />
+          </mxCell>
+          <mxCell id="icon_paj_palm" value="" style="rounded=1;arcSize=32;fillColor=#F2C094;strokeColor=#D69A66;" vertex="1" parent="1">
+            <mxGeometry x="83" y="612" width="60" height="48" as="geometry" />
+          </mxCell>
+          <mxCell id="icon_paj_thumb" value="" style="rounded=1;arcSize=50;fillColor=#F2C094;strokeColor=#D69A66;rotation=-30;" vertex="1" parent="1">
+            <mxGeometry x="138" y="620" width="34" height="12" as="geometry" />
+          </mxCell>
+          <mxCell id="icon_paj_arc1" style="edgeStyle=none;curved=1;endArrow=none;strokeColor=#00997A;strokeWidth=2;" edge="1" parent="1">
+            <mxGeometry relative="1" as="geometry">
+              <mxPoint x="70" y="590" as="sourcePoint" />
+              <mxPoint x="62" y="640" as="targetPoint" />
+              <Array as="points"><mxPoint x="50" y="615" /></Array>
+            </mxGeometry>
+          </mxCell>
+          <mxCell id="icon_paj_arc2" style="edgeStyle=none;curved=1;endArrow=none;strokeColor=#00997A;strokeWidth=2;" edge="1" parent="1">
+            <mxGeometry relative="1" as="geometry">
+              <mxPoint x="78" y="604" as="sourcePoint" />
+              <mxPoint x="70" y="650" as="targetPoint" />
+              <Array as="points"><mxPoint x="60" y="628" /></Array>
+            </mxGeometry>
+          </mxCell>
+          <mxCell id="icon_buz_body" value="" style="ellipse;fillColor=#1A1A1A;strokeColor=#000000;" vertex="1" parent="1">
+            <mxGeometry x="1028" y="316" width="90" height="90" as="geometry" />
+          </mxCell>
+          <mxCell id="icon_buz_hole" value="" style="ellipse;fillColor=#4A4A4A;strokeColor=none;" vertex="1" parent="1">
+            <mxGeometry x="1056" y="344" width="34" height="34" as="geometry" />
+          </mxCell>
+          <mxCell id="icon_buz_core" value="" style="ellipse;fillColor=#8A8A8A;strokeColor=none;" vertex="1" parent="1">
+            <mxGeometry x="1066" y="354" width="14" height="14" as="geometry" />
+          </mxCell>
+          <mxCell id="icon_buz_wav1" style="edgeStyle=none;curved=1;endArrow=none;strokeColor=#E66600;strokeWidth=2.5;" edge="1" parent="1">
+            <mxGeometry relative="1" as="geometry">
+              <mxPoint x="1126" y="336" as="sourcePoint" />
+              <mxPoint x="1126" y="386" as="targetPoint" />
+              <Array as="points"><mxPoint x="1142" y="361" /></Array>
+            </mxGeometry>
+          </mxCell>
+          <mxCell id="icon_buz_wav2" style="edgeStyle=none;curved=1;endArrow=none;strokeColor=#E66600;strokeWidth=2.5;" edge="1" parent="1">
+            <mxGeometry relative="1" as="geometry">
+              <mxPoint x="1144" y="322" as="sourcePoint" />
+              <mxPoint x="1144" y="400" as="targetPoint" />
+              <Array as="points"><mxPoint x="1164" y="361" /></Array>
+            </mxGeometry>
+          </mxCell>
+        </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

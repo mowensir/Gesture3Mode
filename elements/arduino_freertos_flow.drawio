@@ -1,0 +1,251 @@
+<mxfile host="65bd71144e">
+    <diagram id="arduino-freertos-flow" name="Arduino setup/loop 与 FreeRTOS 流程框架">
+        <mxGraphModel dx="1904" dy="884" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0" background="#ffffff">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="ft_title" parent="1" style="text;html=1;fontSize=20;fontStyle=1;fontColor=#1A1A1A;align=left;verticalAlign=middle;" value="Arduino 框架下的 FreeRTOS · setup / loop 流程框架（基于 src/main.cpp）" vertex="1">
+                    <mxGeometry height="32" width="900" x="40" y="12" as="geometry"/>
+                </mxCell>
+                <mxCell id="ft_sub" parent="1" style="text;html=1;fontSize=12;fontColor=#666666;align=left;verticalAlign=middle;" value="核心结论：setup() 和 loop() 并不神秘——它们只是 FreeRTOS 里一个叫 loopTask 的任务在轮流执行；delay() 不是死等，而是把 CPU 让给别的任务" vertex="1">
+                    <mxGeometry height="20" width="1100" x="40" y="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="a1" parent="1" style="rounded=1;arcSize=14;fillColor=#F0F0F0;strokeColor=#777777;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#444444;html=1;shadow=1;" value="上电 / 复位" vertex="1">
+                    <mxGeometry height="54" width="170" x="40" y="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="a2" parent="1" style="rounded=1;arcSize=14;fillColor=#F0F0F0;strokeColor=#777777;strokeWidth=2;fontSize=11;fontStyle=1;fontColor=#444444;html=1;shadow=1;" value="ROM Bootloader&#xa;加载应用程序" vertex="1">
+                    <mxGeometry height="54" width="170" x="250" y="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="a3" parent="1" style="rounded=1;arcSize=14;fillColor=#FDEBDD;strokeColor=#E66600;strokeWidth=2;fontSize=11;fontStyle=1;fontColor=#994000;html=1;shadow=1;" value="FreeRTOS 调度器&#xa;启动" vertex="1">
+                    <mxGeometry height="54" width="170" x="460" y="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="a4" parent="1" style="rounded=1;arcSize=14;fillColor=#FDEBDD;strokeColor=#E66600;strokeWidth=2;fontSize=11;fontStyle=1;fontColor=#994000;html=1;shadow=1;" value="创建 loopTask 任务&#xa;（Arduino 主任务 · Core 1）" vertex="1">
+                    <mxGeometry height="54" width="170" x="670" y="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="a5" parent="1" style="rounded=1;arcSize=14;fillColor=#EFF8F3;strokeColor=#1E9E6E;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#0F5132;html=1;shadow=1;" value="setup()&#xa;执行一次" vertex="1">
+                    <mxGeometry height="54" width="170" x="880" y="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="a6" parent="1" style="rounded=1;arcSize=14;fillColor=#FFF6EE;strokeColor=#E66600;strokeWidth=2;fontSize=11;fontStyle=1;fontColor=#994000;html=1;shadow=1;" value="for(;;){ loop();&#xa;delay(15); } 永不返回" vertex="1">
+                    <mxGeometry height="54" width="170" x="1090" y="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="ea1" edge="1" parent="1" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#999999;endArrow=classic;startArrow=none;">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="210" y="97" as="sourcePoint"/>
+                        <mxPoint x="250" y="97" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ea2" edge="1" parent="1" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#999999;endArrow=classic;startArrow=none;">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="420" y="97" as="sourcePoint"/>
+                        <mxPoint x="460" y="97" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ea3" edge="1" parent="1" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#999999;endArrow=classic;startArrow=none;">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="630" y="97" as="sourcePoint"/>
+                        <mxPoint x="670" y="97" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ea4" edge="1" parent="1" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#999999;endArrow=classic;startArrow=none;">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="840" y="97" as="sourcePoint"/>
+                        <mxPoint x="880" y="97" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ea5" edge="1" parent="1" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#999999;endArrow=classic;startArrow=none;">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1050" y="97" as="sourcePoint"/>
+                        <mxPoint x="1090" y="97" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ea_setup" edge="1" parent="1" style="edgeStyle=none;rounded=0;html=1;strokeWidth=1.5;strokeColor=#AAAAAA;dashed=1;endArrow=classic;startArrow=none;">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="965" y="146"/>
+                            <mxPoint x="230" y="146"/>
+                        </Array>
+                        <mxPoint x="965" y="124" as="sourcePoint"/>
+                        <mxPoint x="230" y="170" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ea_loop" edge="1" parent="1" style="edgeStyle=none;rounded=0;html=1;strokeWidth=1.5;strokeColor=#AAAAAA;dashed=1;endArrow=classic;startArrow=none;">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1175" y="156"/>
+                            <mxPoint x="680" y="156"/>
+                        </Array>
+                        <mxPoint x="1175" y="124" as="sourcePoint"/>
+                        <mxPoint x="680" y="170" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="b_card" parent="1" style="rounded=1;arcSize=8;fillColor=#EFF8F3;strokeColor=#96D3B8;strokeWidth=1.5;shadow=1;" value="" vertex="1">
+                    <mxGeometry height="240" width="390" x="40" y="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="b_t" parent="1" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#0F5132;align=left;verticalAlign=middle;spacingLeft=10;" value="setup() · 只执行一次（main.cpp 第 441 行）" vertex="1">
+                    <mxGeometry height="18" width="390" x="40" y="178" as="geometry"/>
+                </mxCell>
+                <mxCell id="b_c1" parent="1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" value="Serial.begin(115200);      // 调试串口" vertex="1">
+                    <mxGeometry height="15" width="390" x="40" y="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="b_c2" parent="1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" value="pinMode(BOOT_PIN, INPUT_PULLUP);" vertex="1">
+                    <mxGeometry height="15" width="390" x="40" y="215" as="geometry"/>
+                </mxCell>
+                <mxCell id="b_c3" parent="1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" value="ledcSetup + ledcAttachPin  // 蜂鸣器 PWM" vertex="1">
+                    <mxGeometry height="15" width="390" x="40" y="230" as="geometry"/>
+                </mxCell>
+                <mxCell id="b_c4" parent="1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" value="Wire.begin(21, 22);        // I²C 总线" vertex="1">
+                    <mxGeometry height="15" width="390" x="40" y="245" as="geometry"/>
+                </mxCell>
+                <mxCell id="b_c5" parent="1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" value="display.begin(..., 0x3C);  // OLED 就绪" vertex="1">
+                    <mxGeometry height="15" width="390" x="40" y="260" as="geometry"/>
+                </mxCell>
+                <mxCell id="b_c6" parent="1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" value="paj.begin(&amp;Wire);          // 手势传感器" vertex="1">
+                    <mxGeometry height="15" width="390" x="40" y="275" as="geometry"/>
+                </mxCell>
+                <mxCell id="b_c7" parent="1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" value="i2cScan();                 // 上电自检" vertex="1">
+                    <mxGeometry height="15" width="390" x="40" y="290" as="geometry"/>
+                </mxCell>
+                <mxCell id="b_c8" parent="1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" value="initBLE();                 // BLE 初始化+广播" vertex="1">
+                    <mxGeometry height="15" width="390" x="40" y="305" as="geometry"/>
+                </mxCell>
+                <mxCell id="b_n" parent="1" style="text;html=1;fontSize=10;fontColor=#555555;align=left;verticalAlign=middle;spacingLeft=12;spacingRight=10;whiteSpace=wrap;" value="把所有硬件一次性配置好：GPIO、PWM、I²C、OLED、手势传感器、BLE。任何一步失败只打印日志，系统继续运行；全部完成后 beepNonBlock(90) 提示“就绪”，随后 loopTask 进入 for(;;) 循环。" vertex="1">
+                    <mxGeometry height="80" width="390" x="40" y="324" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_card" parent="1" style="rounded=1;arcSize=8;fillColor=#FFF6EE;strokeColor=#F0B98A;strokeWidth=1.5;shadow=1;" value="" vertex="1">
+                    <mxGeometry height="560" width="420" x="470" y="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_t" parent="1" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#994000;align=left;verticalAlign=middle;spacingLeft=10;" value="loop() · 被 loopTask 无限循环调用（每次都很快返回）" vertex="1">
+                    <mxGeometry height="18" width="420" x="470" y="178" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_s1" parent="1" style="rounded=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#E6A26B;strokeWidth=1.5;fontSize=11;fontStyle=1;fontColor=#994000;html=1;align=left;spacingLeft=12;whiteSpace=wrap;" value="① 蜂鸣器到点关闭&#xa;millis() ≥ beepEndMs → ledcWrite(0, 0)" vertex="1">
+                    <mxGeometry height="64" width="380" x="490" y="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_s2" parent="1" style="rounded=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#E6A26B;strokeWidth=1.5;fontSize=11;fontStyle=1;fontColor=#994000;html=1;align=left;spacingLeft=12;whiteSpace=wrap;" value="② BOOT 键 30ms 稳定防抖&#xa;确认 LOW → 切换模式 + beepNonBlock(70)" vertex="1">
+                    <mxGeometry height="64" width="380" x="490" y="290" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_s3" parent="1" style="rounded=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#E6A26B;strokeWidth=1.5;fontSize=11;fontStyle=1;fontColor=#994000;html=1;align=left;spacingLeft=12;whiteSpace=wrap;" value="③ 手势读取（250ms 冷却防重复）&#xa;readGesture() → doGesture() → sendXxx + notify()" vertex="1">
+                    <mxGeometry height="76" width="380" x="490" y="370" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_s4" parent="1" style="rounded=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#E6A26B;strokeWidth=1.5;fontSize=11;fontStyle=1;fontColor=#994000;html=1;align=left;spacingLeft=12;whiteSpace=wrap;" value="④ 状态刷新（每 2000ms）&#xa;updateBleRssi() → oledShow() 画信号条" vertex="1">
+                    <mxGeometry height="64" width="380" x="490" y="462" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_s5" parent="1" style="rounded=1;arcSize=12;fillColor=#FDEBDD;strokeColor=#E66600;strokeWidth=2;fontSize=11;fontStyle=1;fontColor=#994000;html=1;align=left;spacingLeft=12;whiteSpace=wrap;" value="⑤ delay(15);  → vTaskDelay 让出 CPU" vertex="1">
+                    <mxGeometry height="56" width="380" x="490" y="542" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_a1" edge="1" parent="1" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#E66600;endArrow=classic;startArrow=none;">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="680" y="274" as="sourcePoint"/>
+                        <mxPoint x="680" y="290" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="c_a2" edge="1" parent="1" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#E66600;endArrow=classic;startArrow=none;">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="680" y="354" as="sourcePoint"/>
+                        <mxPoint x="680" y="370" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="c_a3" edge="1" parent="1" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#E66600;endArrow=classic;startArrow=none;">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="680" y="446" as="sourcePoint"/>
+                        <mxPoint x="680" y="462" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="c_a4" edge="1" parent="1" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#E66600;endArrow=classic;startArrow=none;">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="680" y="526" as="sourcePoint"/>
+                        <mxPoint x="680" y="542" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="c_back" edge="1" parent="1" style="edgeStyle=none;rounded=0;html=1;strokeWidth=2;strokeColor=#E66600;dashed=1;endArrow=classic;startArrow=none;fontSize=10;fontColor=#994000;" value="一圈最快 ~15ms，回到 ①">
+                    <mxGeometry relative="1" x="-1" y="-287" as="geometry">
+                        <mxPoint x="287" y="287" as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="478" y="570"/>
+                            <mxPoint x="478" y="242"/>
+                        </Array>
+                        <mxPoint x="490" y="570" as="sourcePoint"/>
+                        <mxPoint x="490" y="242" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="c_n" parent="1" style="text;html=1;fontSize=10;fontColor=#555555;align=left;verticalAlign=middle;spacingLeft=12;spacingRight=10;whiteSpace=wrap;" value="四个“子任务”全靠 millis() 时间戳轮询实现，谁到点就处理谁；loop() 永不在任何一步死等。" vertex="1">
+                    <mxGeometry height="46" width="380" x="490" y="614" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_n2" parent="1" style="text;html=1;fontSize=10;fontColor=#555555;align=left;verticalAlign=middle;spacingLeft=12;spacingRight=10;whiteSpace=wrap;" value="这就是“单任务并发”：没有用任何 xTaskCreate，只靠非阻塞写法，一个 loop 就同时照看蜂鸣器、按键、手势、显示和 BLE 状态。" vertex="1">
+                    <mxGeometry height="52" width="380" x="490" y="662" as="geometry"/>
+                </mxCell>
+                <mxCell id="d1_card" parent="1" style="rounded=1;arcSize=8;fillColor=#F3F7FE;strokeColor=#9DB9F0;strokeWidth=1.5;shadow=1;" value="" vertex="1">
+                    <mxGeometry height="160" width="420" x="940" y="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="d1_t" parent="1" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#1C4299;align=left;verticalAlign=middle;spacingLeft=10;" value="delay(15) 的真面目 · 非阻塞的关键" vertex="1">
+                    <mxGeometry height="18" width="420" x="940" y="178" as="geometry"/>
+                </mxCell>
+                <mxCell id="d1_c1" parent="1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" value="delay(ms) ≡ vTaskDelay(ms / tick)" vertex="1">
+                    <mxGeometry height="15" width="420" x="940" y="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="d1_c2" parent="1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" value="任务进入“阻塞态”→ CPU 立即让给" vertex="1">
+                    <mxGeometry height="15" width="420" x="940" y="215" as="geometry"/>
+                </mxCell>
+                <mxCell id="d1_c3" parent="1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" value="其它就绪任务（BLE 协议栈、系统空闲）" vertex="1">
+                    <mxGeometry height="15" width="420" x="940" y="230" as="geometry"/>
+                </mxCell>
+                <mxCell id="d1_n" parent="1" style="text;html=1;fontSize=10;fontColor=#555555;align=left;verticalAlign=middle;spacingLeft=12;spacingRight=10;whiteSpace=wrap;" value="loop() 每圈最多等 15ms 就回来干活；若写 delay(5000)，蓝牙提示音、按键响应全都会卡 5 秒——所以本项目全用 millis() 时间戳（beepEndMs / 30ms 防抖 / 2s 刷新），不用长 delay。" vertex="1">
+                    <mxGeometry height="76" width="420" x="940" y="248" as="geometry"/>
+                </mxCell>
+                <mxCell id="d2_card" parent="1" style="rounded=1;arcSize=8;fillColor=#EFF9F6;strokeColor=#8FD4C6;strokeWidth=1.5;shadow=1;" value="" vertex="1">
+                    <mxGeometry height="150" width="420" x="940" y="360" as="geometry"/>
+                </mxCell>
+                <mxCell id="d2_t" parent="1" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#00614D;align=left;verticalAlign=middle;spacingLeft=10;" value="双核分工（ESP32-D0WD · 两个 CPU 核）" vertex="1">
+                    <mxGeometry height="18" width="420" x="940" y="368" as="geometry"/>
+                </mxCell>
+                <mxCell id="d2_c1" parent="1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" value="Core 0 → 蓝牙/WiFi 协议栈" vertex="1">
+                    <mxGeometry height="15" width="420" x="940" y="390" as="geometry"/>
+                </mxCell>
+                <mxCell id="d2_c2" parent="1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" value="  BT 控制器 + NimBLE host 任务" vertex="1">
+                    <mxGeometry height="15" width="420" x="940" y="405" as="geometry"/>
+                </mxCell>
+                <mxCell id="d2_c3" parent="1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" value="Core 1 → Arduino loopTask" vertex="1">
+                    <mxGeometry height="15" width="420" x="940" y="420" as="geometry"/>
+                </mxCell>
+                <mxCell id="d2_c4" parent="1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" value="  你的 setup() / loop() 在这里跑" vertex="1">
+                    <mxGeometry height="15" width="420" x="940" y="435" as="geometry"/>
+                </mxCell>
+                <mxCell id="d2_n" parent="1" style="text;html=1;fontSize=10;fontColor=#555555;align=left;verticalAlign=middle;spacingLeft=12;spacingRight=10;whiteSpace=wrap;" value="两个核由同一个 FreeRTOS 调度器统一管理：蓝牙收发跑在 Core 0，用户代码跑在 Core 1，几乎互不抢时间。这是 Arduino 框架的默认绑定（loopTask 固定 Core 1、NimBLE host 固定 Core 0），main.cpp 未显式调用绑核 API，无需任何额外代码。" vertex="1">
+                    <mxGeometry height="48" width="420" x="940" y="454" as="geometry"/>
+                </mxCell>
+                <mxCell id="d3_card" parent="1" style="rounded=1;arcSize=8;fillColor=#F7F2FD;strokeColor=#C7ADF2;strokeWidth=1.5;shadow=1;" value="" vertex="1">
+                    <mxGeometry height="170" width="420" x="940" y="540" as="geometry"/>
+                </mxCell>
+                <mxCell id="d3_t" parent="1" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#52229E;align=left;verticalAlign=middle;spacingLeft=10;" value="跨任务共享变量（回调在哪个任务里跑？）" vertex="1">
+                    <mxGeometry height="18" width="420" x="940" y="548" as="geometry"/>
+                </mxCell>
+                <mxCell id="d3_c1" parent="1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" value="volatile bool deviceConnected;" vertex="1">
+                    <mxGeometry height="15" width="420" x="940" y="570" as="geometry"/>
+                </mxCell>
+                <mxCell id="d3_c2" parent="1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" value="onConnect / onDisconnect 回调" vertex="1">
+                    <mxGeometry height="15" width="420" x="940" y="585" as="geometry"/>
+                </mxCell>
+                <mxCell id="d3_c3" parent="1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" value="  → 运行在 BLE 任务（Core 0），不是 loop！" vertex="1">
+                    <mxGeometry height="15" width="420" x="940" y="600" as="geometry"/>
+                </mxCell>
+                <mxCell id="d3_c4" parent="1" style="text;html=1;fontFamily=Courier New;fontSize=10;fontColor=#24292F;align=left;verticalAlign=middle;spacingLeft=12;" value="loop() 任务只读取该标志 → 加 volatile" vertex="1">
+                    <mxGeometry height="15" width="420" x="940" y="615" as="geometry"/>
+                </mxCell>
+                <mxCell id="d3_n" parent="1" style="text;html=1;fontSize=10;fontColor=#555555;align=left;verticalAlign=middle;spacingLeft=12;spacingRight=10;whiteSpace=wrap;" value="一个任务写、另一个任务读 → 必须 volatile，防止编译器把“重复读取”优化成只读一次；bleRssi 只在 loop 任务里读写，所以不用加。这是 main.cpp 里现成的教学例子。" vertex="1">
+                    <mxGeometry height="68" width="420" x="940" y="634" as="geometry"/>
+                </mxCell>
+                <mxCell id="ft_note" parent="1" style="rounded=1;arcSize=10;fillColor=#FDF9EC;strokeColor=#E5D08A;strokeWidth=1.5;" value="" vertex="1">
+                    <mxGeometry height="86" width="1320" x="40" y="770" as="geometry"/>
+                </mxCell>
+                <mxCell id="ft_note_t" parent="1" style="text;html=1;fontSize=12;fontStyle=1;fontColor=#7A5B00;align=left;verticalAlign=middle;spacingLeft=12;" value="要点总结" vertex="1">
+                    <mxGeometry height="18" width="200" x="40" y="778" as="geometry"/>
+                </mxCell>
+                <mxCell id="ft_note_1" parent="1" style="text;html=1;fontSize=11;fontColor=#444444;align=left;verticalAlign=middle;spacingLeft=12;whiteSpace=wrap;" value="① setup()/loop() = FreeRTOS 的 loopTask 任务：setup 跑一遍，loop 被 for(;;) 反复调用；② delay() = vTaskDelay，让出 CPU 而不是死等；" vertex="1">
+                    <mxGeometry height="24" width="1290" x="52" y="798" as="geometry"/>
+                </mxCell>
+                <mxCell id="ft_note_2" parent="1" style="text;html=1;fontSize=11;fontColor=#444444;align=left;verticalAlign=middle;spacingLeft=12;whiteSpace=wrap;" value="③ 蓝牙协议栈在 Core 0 的独立任务里，BLE 回调不在 loop() 中执行 → 跨任务标志要 volatile；④ 单任务也能“并发”：像 main.cpp 那样用 millis() 时间戳轮询，每圈 ≤15ms 永不阻塞。" vertex="1">
+                    <mxGeometry height="24" width="1290" x="52" y="824" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
